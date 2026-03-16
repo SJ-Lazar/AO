@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AO.API/AO.API.csproj" />
+  <Project Path="AO.Core/AO.Core.csproj" />
+</Solution>

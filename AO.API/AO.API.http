@@ -1,0 +1,7 @@
+@AO.API_HostAddress = http://localhost:5259
+
+GET {{AO.API_HostAddress}}/api/ping/
+Accept: application/json
+X-API-Key: ABC
+
+###
