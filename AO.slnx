@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="AO.API/AO.API.csproj" />
   <Project Path="AO.Core/AO.Core.csproj" />
+  <Project Path="AO.Tests/AO.Tests.csproj" Id="757927bf-58e6-456f-9347-5d57815a0815" />
 </Solution>
