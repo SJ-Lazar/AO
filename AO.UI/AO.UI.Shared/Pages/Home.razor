@@ -1,0 +1,313 @@
+﻿@page "/"
+@using AO.UI.Shared.Services
+@inject IFormFactor FormFactor
+
+<PageTitle>Home</PageTitle>
+
+<div class="crm-dashboard">
+    <section id="overview" class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Minimal CRM</span>
+            <h1>Compact customer workspace</h1>
+            <p>Desktop-style shell, mobile-first layout, configurable light and dark themes, and compact modal and dialog patterns.</p>
+        </div>
+
+        <div class="crm-hero-actions">
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateContactModal">New contact</button>
+            <button type="button" class="crm-button crm-button-secondary" @onclick="OpenDealDialog">Deal dialog</button>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Pipeline</span>
+            <strong>$528.9K</strong>
+            <span class="crm-badge crm-badge-accent">+7.8%</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Open deals</span>
+            <strong>42</strong>
+            <span class="crm-badge">12 closing this week</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Tasks</span>
+            <strong>18</strong>
+            <span class="crm-badge crm-badge-warning">5 overdue</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Platform</span>
+            <strong>@platform</strong>
+            <span class="crm-badge">@factor</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article id="pipeline" class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Pipeline overview</h2>
+                    <p>Compact stage tracking for active revenue.</p>
+                </div>
+                <div class="crm-inline-actions">
+                    <span class="crm-badge">Sep 1 - Nov 30</span>
+                    <button type="button" class="crm-chip-button">Filters</button>
+                </div>
+            </div>
+
+            <div class="crm-stage-grid">
+                <div class="crm-stage-card">
+                    <span>Lead</span>
+                    <strong>26</strong>
+                    <small>$112K</small>
+                </div>
+                <div class="crm-stage-card">
+                    <span>Qualified</span>
+                    <strong>18</strong>
+                    <small>$156K</small>
+                </div>
+                <div class="crm-stage-card">
+                    <span>Proposal</span>
+                    <strong>11</strong>
+                    <small>$148K</small>
+                </div>
+                <div class="crm-stage-card crm-stage-card-accent">
+                    <span>Negotiation</span>
+                    <strong>7</strong>
+                    <small>$113K</small>
+                </div>
+            </div>
+
+            <div class="crm-list-table">
+                <div class="crm-table-row crm-table-head">
+                    <span>Deal</span>
+                    <span>Owner</span>
+                    <span>Value</span>
+                    <span>Stage</span>
+                </div>
+                <div class="crm-table-row">
+                    <span>Mikasa Renewal</span>
+                    <span>Armin A.</span>
+                    <span>$156,841</span>
+                    <span><span class="crm-badge crm-badge-accent">Negotiation</span></span>
+                </div>
+                <div class="crm-table-row">
+                    <span>Rolf Inc Expansion</span>
+                    <span>Eren Y.</span>
+                    <span>$42,300</span>
+                    <span><span class="crm-badge">Proposal</span></span>
+                </div>
+                <div class="crm-table-row">
+                    <span>Cloud23 Upgrade</span>
+                    <span>Mikasa A.</span>
+                    <span>$27,435</span>
+                    <span><span class="crm-badge crm-badge-success">Qualified</span></span>
+                </div>
+            </div>
+        </article>
+
+        <article id="tasks" class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Today</h2>
+                    <p>Compact agenda for follow-ups.</p>
+                </div>
+                <span class="crm-badge crm-badge-warning">5 overdue</span>
+            </div>
+
+            <div class="crm-stack-list">
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Call Dribbble</strong>
+                        <small>Review contract terms</small>
+                    </div>
+                    <span class="crm-badge">09:00</span>
+                </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Send proposal</strong>
+                        <small>Instagram partnership</small>
+                    </div>
+                    <span class="crm-badge crm-badge-accent">11:30</span>
+                </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Meeting summary</strong>
+                        <small>Google quarterly review</small>
+                    </div>
+                    <span class="crm-badge">14:00</span>
+                </div>
+            </div>
+        </article>
+
+        <article id="contacts" class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Contacts</h2>
+                    <p>Small, dense list with account context.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateContactModal">Add</button>
+            </div>
+
+            <div class="crm-stack-list">
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Mikasa A.</strong>
+                        <small>Mikasa • mikasa@company.com</small>
+                    </div>
+                    <span class="crm-badge crm-badge-accent">VIP</span>
+                </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Eren Y.</strong>
+                        <small>Rolf Inc • eren@rolf.example</small>
+                    </div>
+                    <span class="crm-badge">Owner</span>
+                </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Armin A.</strong>
+                        <small>Cloud23 • armin@cloud23.example</small>
+                    </div>
+                    <span class="crm-badge crm-badge-success">Active</span>
+                </div>
+            </div>
+        </article>
+
+        <article id="reports" class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Revenue snapshot</h2>
+                    <p>Example compact reporting panel.</p>
+                </div>
+                <div class="crm-inline-actions">
+                    <span class="crm-badge">Win rate 44%</span>
+                    <span class="crm-badge crm-badge-accent">Value 528K</span>
+                </div>
+            </div>
+
+            <div class="crm-chart-shell">
+                <div class="crm-chart-card crm-chart-card-accent">
+                    <span>Revenue this month</span>
+                    <strong>$18,952</strong>
+                    <small>37 deals in motion</small>
+                </div>
+                <div class="crm-chart-bars" aria-hidden="true">
+                    <span style="height: 36%"></span>
+                    <span style="height: 68%"></span>
+                    <span style="height: 48%"></span>
+                    <span style="height: 82%"></span>
+                    <span style="height: 58%"></span>
+                    <span style="height: 72%"></span>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <section class="crm-surface-grid">
+        <article id="modals" class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Modal surface</h2>
+                    <p>Compact create and edit flows.</p>
+                </div>
+                <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateContactModal">Open modal</button>
+            </div>
+        </article>
+
+        <article id="dialogs" class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Dialog surface</h2>
+                    <p>Focused side detail pattern.</p>
+                </div>
+                <button type="button" class="crm-button crm-button-secondary" @onclick="OpenDealDialog">Open dialog</button>
+            </div>
+        </article>
+    </section>
+</div>
+
+<CrmModal IsOpen="isCreateContactModalOpen" Title="Create contact" Subtitle="Compact modal surface" Size="Medium" OnClose="CloseCreateContactModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>First name</span>
+                <input class="crm-input" value="Mikasa" />
+            </label>
+            <label>
+                <span>Last name</span>
+                <input class="crm-input" value="Ackerman" />
+            </label>
+            <label>
+                <span>Email</span>
+                <input class="crm-input" value="mikasa@company.com" />
+            </label>
+            <label>
+                <span>Company</span>
+                <input class="crm-input" value="Mikasa" />
+            </label>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateContactModal">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="CloseCreateContactModal">Save contact</button>
+    </FooterContent>
+</CrmModal>
+
+<CrmDialog IsOpen="isDealDialogOpen" Title="Deal details" Subtitle="Negotiation summary" OnClose="CloseDealDialog">
+    <ChildContent>
+        <div class="crm-stack-list">
+            <div class="crm-list-item">
+                <div>
+                    <strong>Account</strong>
+                    <small>Mikasa</small>
+                </div>
+                <span class="crm-badge crm-badge-accent">Active</span>
+            </div>
+            <div class="crm-list-item">
+                <div>
+                    <strong>Value</strong>
+                    <small>$156,841</small>
+                </div>
+                <span class="crm-badge">44% probability</span>
+            </div>
+            <div class="crm-list-item">
+                <div>
+                    <strong>Next step</strong>
+                    <small>Share redlined proposal with legal notes.</small>
+                </div>
+                <span class="crm-badge crm-badge-warning">Today</span>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseDealDialog">Close</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="CloseDealDialog">Update deal</button>
+    </FooterContent>
+</CrmDialog>
+
+@code {
+    private string factor => FormFactor.GetFormFactor();
+    private string platform => FormFactor.GetPlatform();
+    private bool isCreateContactModalOpen;
+    private bool isDealDialogOpen;
+
+    private void OpenCreateContactModal()
+    {
+        isCreateContactModalOpen = true;
+    }
+
+    private void CloseCreateContactModal()
+    {
+        isCreateContactModalOpen = false;
+    }
+
+    private void OpenDealDialog()
+    {
+        isDealDialogOpen = true;
+    }
+
+    private void CloseDealDialog()
+    {
+        isDealDialogOpen = false;
+    }
+}

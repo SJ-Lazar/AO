@@ -1,0 +1,63 @@
+﻿@inherits LayoutComponentBase
+
+<div class="crm-shell @(isDarkTheme ? "theme-dark" : "theme-light") @(isNavigationOpen ? "nav-open" : string.Empty)">
+    <button type="button" class="crm-overlay" aria-label="Close navigation" @onclick="CloseNavigation"></button>
+
+    <aside class="crm-sidebar-shell">
+        <NavMenu OnNavigate="CloseNavigation" />
+    </aside>
+
+    <div class="crm-app-host">
+        <header class="crm-topbar-shell">
+            <div class="crm-topbar-leading">
+                <button type="button" class="crm-icon-button crm-mobile-nav" aria-label="Open navigation" @onclick="ToggleNavigation">☰</button>
+                <div class="crm-brand-mark">AO</div>
+                <div class="crm-brand-copy">
+                    <strong>AO CRM</strong>
+                    <span>Mobile-first workspace</span>
+                </div>
+            </div>
+
+            <div class="crm-topbar-search-shell">
+                <input class="crm-input crm-topbar-search" placeholder="Search contacts, deals, tasks" />
+            </div>
+
+            <div class="crm-topbar-actions">
+                <button type="button" class="crm-chip-button" @onclick="ToggleTheme">@(isDarkTheme ? "Dark" : "Light")</button>
+                <button type="button" class="crm-icon-button">＋</button>
+            </div>
+        </header>
+
+        <main class="crm-main-shell">
+            <article class="crm-workspace-shell">
+                @Body
+            </article>
+        </main>
+    </div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool isDarkTheme;
+    private bool isNavigationOpen;
+
+    private void ToggleTheme()
+    {
+        isDarkTheme = !isDarkTheme;
+    }
+
+    private void ToggleNavigation()
+    {
+        isNavigationOpen = !isNavigationOpen;
+    }
+
+    private void CloseNavigation()
+    {
+        isNavigationOpen = false;
+    }
+}

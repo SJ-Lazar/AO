@@ -1,0 +1,47 @@
+@if (IsOpen)
+{
+    <div class="crm-dialog-backdrop" @onclick="HandleBackdropClick">
+        <section class="crm-dialog-panel" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <header class="crm-dialog-header">
+                <div>
+                    <h2 class="crm-dialog-title">@Title</h2>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <span class="crm-dialog-subtitle">@Subtitle</span>
+                    }
+                </div>
+                <button type="button" class="crm-icon-button" aria-label="Close dialog" @onclick="CloseAsync">×</button>
+            </header>
+
+            <div class="crm-dialog-body">
+                @ChildContent
+            </div>
+
+            @if (FooterContent is not null)
+            {
+                <footer class="crm-dialog-footer">
+                    @FooterContent
+                </footer>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task HandleBackdropClick()
+    {
+        return CloseAsync();
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+}

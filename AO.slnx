@@ -1,5 +1,12 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Readme.md" />
+    <File Path="UI.md" />
+  </Folder>
   <Project Path="AO.API/AO.API.csproj" />
   <Project Path="AO.Core/AO.Core.csproj" />
   <Project Path="AO.Tests/AO.Tests.csproj" Id="757927bf-58e6-456f-9347-5d57815a0815" />
+  <Project Path="AO.UI/AO.UI.Shared/AO.UI.Shared.csproj" Id="e3219dc1-5152-451c-ba89-29b226d57370" />
+  <Project Path="AO.UI/AO.UI.Web/AO.UI.Web.csproj" Id="ca15f6c2-40f7-40b1-9c2d-30ad52bb0d50" />
+  <Project Path="AO.UI/AO.UI/AO.UI.csproj" Id="f7846900-1489-4dff-921b-c75457f134e3" />
 </Solution>

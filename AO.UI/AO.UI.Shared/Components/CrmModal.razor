@@ -1,0 +1,58 @@
+@if (IsOpen)
+{
+    <div class="crm-modal-backdrop" @onclick="HandleBackdropClick">
+        <section class="crm-modal-panel @GetSizeClass()" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <header class="crm-modal-header">
+                <div>
+                    <h2 class="crm-modal-title">@Title</h2>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <span class="crm-modal-subtitle">@Subtitle</span>
+                    }
+                </div>
+                <button type="button" class="crm-icon-button" aria-label="Close modal" @onclick="CloseAsync">×</button>
+            </header>
+
+            <div class="crm-modal-body">
+                @ChildContent
+            </div>
+
+            @if (FooterContent is not null)
+            {
+                <footer class="crm-modal-footer">
+                    @FooterContent
+                </footer>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string Size { get; set; } = "Medium";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task HandleBackdropClick()
+    {
+        return CloseAsync();
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+
+    private string GetSizeClass()
+    {
+        return Size.ToLowerInvariant() switch
+        {
+            "small" => "crm-modal-small",
+            "large" => "crm-modal-large",
+            _ => "crm-modal-medium"
+        };
+    }
+}

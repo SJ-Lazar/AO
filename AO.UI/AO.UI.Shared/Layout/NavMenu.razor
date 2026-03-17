@@ -1,0 +1,62 @@
+﻿<aside class="crm-sidebar">
+    <div class="crm-sidebar-header">
+        <div>
+            <div class="crm-sidebar-title">Minimal CRM</div>
+            <div class="crm-sidebar-subtitle">Compact workspace</div>
+        </div>
+        <span class="crm-badge crm-badge-accent">MVP</span>
+    </div>
+
+    <nav class="crm-nav">
+        <div class="crm-nav-group">
+            <div class="crm-nav-label">Workspace</div>
+            <a class="crm-nav-link" href="#overview" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">◌</span>
+                <span>Overview</span>
+            </a>
+            <a class="crm-nav-link" href="#pipeline" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">◔</span>
+                <span>Pipeline</span>
+            </a>
+            <a class="crm-nav-link" href="#tasks" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">◴</span>
+                <span>Tasks</span>
+            </a>
+            <a class="crm-nav-link" href="#contacts" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">◎</span>
+                <span>Contacts</span>
+            </a>
+            <a class="crm-nav-link" href="#reports" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">◫</span>
+                <span>Reports</span>
+            </a>
+        </div>
+
+        <div class="crm-nav-group">
+            <div class="crm-nav-label">Surfaces</div>
+            <a class="crm-nav-link" href="#modals" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">▣</span>
+                <span>Modals</span>
+            </a>
+            <a class="crm-nav-link" href="#dialogs" @onclick="HandleNavigate">
+                <span class="crm-nav-icon">▤</span>
+                <span>Dialogs</span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="crm-sidebar-footer">
+        <div class="crm-sidebar-note">Mobile first, then web.</div>
+        <div class="crm-sidebar-meta">Desktop-style shell with in-view scrolling.</div>
+    </div>
+</aside>
+
+@code {
+    [Parameter] public EventCallback OnNavigate { get; set; }
+
+    private Task HandleNavigate()
+    {
+        return OnNavigate.InvokeAsync();
+    }
+}
+
