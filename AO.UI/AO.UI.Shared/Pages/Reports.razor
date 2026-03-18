@@ -6,6 +6,7 @@
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
 @inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 
 <PageTitle>Reports</PageTitle>
 
@@ -244,7 +245,10 @@
                     <h2>Deals drill-down</h2>
                     <p>Latest deals matching the selected filters.</p>
                 </div>
-                <span class="crm-badge">@report.Deals.Count items</span>
+                <div class="crm-inline-actions">
+                    <span class="crm-badge">@report.Deals.Count items</span>
+                    <button type="button" class="crm-chip-button" @onclick="OpenDealsPage">Open page</button>
+                </div>
             </div>
 
             <div class="crm-stack-list">
@@ -274,7 +278,10 @@
                     <h2>Tasks drill-down</h2>
                     <p>Open and completed tasks inside the filtered report scope.</p>
                 </div>
-                <span class="crm-badge crm-badge-warning">@report.Summary.TasksDueTodayCount due today</span>
+                <div class="crm-inline-actions">
+                    <span class="crm-badge crm-badge-warning">@report.Summary.TasksDueTodayCount due today</span>
+                    <button type="button" class="crm-chip-button" @onclick="OpenTasksPage">Open page</button>
+                </div>
             </div>
 
             <div class="crm-stack-list">
@@ -410,6 +417,16 @@
         await LoadAsync();
     }
 
+    private void OpenDealsPage()
+    {
+        NavigationManager.NavigateTo(BuildFilteredPageUri("/deals"));
+    }
+
+    private void OpenTasksPage()
+    {
+        NavigationManager.NavigateTo(BuildFilteredPageUri("/tasks"));
+    }
+
     private GetReportsRequest BuildRequest()
     {
         return new GetReportsRequest
@@ -419,6 +436,18 @@
             CompanyId = Guid.TryParse(filters.CompanyId, out var companyId) ? companyId : null,
             Stage = Enum.TryParse<DealStage>(filters.Stage, true, out var stage) ? stage : null
         };
+    }
+
+    private string BuildFilteredPageUri(string baseUri)
+    {
+        var request = BuildRequest();
+        return NavigationManager.GetUriWithQueryParameters(baseUri, new Dictionary<string, object?>
+        {
+            ["fromUtc"] = request.FromUtc?.ToString("yyyy-MM-dd"),
+            ["toUtc"] = request.ToUtc?.ToString("yyyy-MM-dd"),
+            ["companyId"] = request.CompanyId,
+            ["stage"] = request.Stage?.ToString()
+        });
     }
 
     private bool IsStageSelected(string stage)

@@ -4,6 +4,7 @@
 @using AO.Core.Features.Deals
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
+@inject NavigationManager NavigationManager
 
 <PageTitle>Tasks</PageTitle>
 
@@ -28,6 +29,34 @@
             <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateTaskModal">New task</button>
         </div>
     </section>
+
+    @if (HasActiveFilters)
+    {
+        <section class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Report filters</h2>
+                    <p>This task list is narrowed by query-string filters from reports.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="ClearFilters">Clear</button>
+            </div>
+
+            <div class="crm-inline-actions">
+                @if (FromUtc.HasValue || ToUtc.HasValue)
+                {
+                    <span class="crm-badge">@GetDateRangeLabel()</span>
+                }
+                @if (CompanyId.HasValue)
+                {
+                    <span class="crm-badge crm-badge-accent">@GetSelectedCompanyName()</span>
+                }
+                @if (ParsedStage.HasValue)
+                {
+                    <span class="crm-badge crm-badge-warning">@ParsedStage</span>
+                }
+            </div>
+        </section>
+    }
 
     <section class="crm-stat-grid">
         <article class="crm-card crm-stat-card">
@@ -154,6 +183,7 @@
 @code {
     private readonly List<ContactDto> contacts = [];
     private readonly List<DealDto> deals = [];
+    private readonly List<CrmTaskDto> allTasks = [];
     private readonly List<CrmTaskDto> tasks = [];
     private readonly HashSet<Guid> completingTaskIds = [];
     private bool isLoading;
@@ -163,7 +193,19 @@
     private string? taskModalErrorMessage;
     private TaskFormModel taskForm = new();
 
-    protected override async Task OnInitializedAsync()
+    [SupplyParameterFromQuery(Name = "fromUtc")]
+    public DateTime? FromUtc { get; set; }
+
+    [SupplyParameterFromQuery(Name = "toUtc")]
+    public DateTime? ToUtc { get; set; }
+
+    [SupplyParameterFromQuery(Name = "companyId")]
+    public Guid? CompanyId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "stage")]
+    public string? StageQuery { get; set; }
+
+    protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
     }
@@ -184,20 +226,87 @@
             contacts.AddRange(await contactsTask);
             deals.Clear();
             deals.AddRange(await dealsTask);
-            tasks.Clear();
-            tasks.AddRange((await tasksTask).OrderBy(task => task.IsCompleted).ThenBy(task => task.DueAtUtc));
+            allTasks.Clear();
+            allTasks.AddRange(await tasksTask);
+
+            ApplyFilters();
         }
         catch (Exception exception)
         {
             errorMessage = exception.Message;
             contacts.Clear();
             deals.Clear();
+            allTasks.Clear();
             tasks.Clear();
         }
         finally
         {
             isLoading = false;
         }
+    }
+
+    private void ApplyFilters()
+    {
+        var filteredTasks = allTasks
+            .Where(task => !FromUtc.HasValue || task.CreatedUtc.Date >= FromUtc.Value.Date)
+            .Where(task => !ToUtc.HasValue || task.CreatedUtc.Date <= ToUtc.Value.Date)
+            .Where(MatchesCompanyFilter)
+            .Where(MatchesStageFilter)
+            .OrderBy(task => task.IsCompleted)
+            .ThenBy(task => task.DueAtUtc)
+            .ThenByDescending(task => task.CreatedUtc)
+            .ToList();
+
+        tasks.Clear();
+        tasks.AddRange(filteredTasks);
+    }
+
+    private DealStage? ParsedStage => Enum.TryParse<DealStage>(StageQuery, true, out var stage) ? stage : null;
+
+    private bool HasActiveFilters => FromUtc.HasValue || ToUtc.HasValue || CompanyId.HasValue || ParsedStage.HasValue;
+
+    private bool MatchesCompanyFilter(CrmTaskDto task)
+    {
+        if (!CompanyId.HasValue)
+        {
+            return true;
+        }
+
+        var dealCompanyId = deals.FirstOrDefault(deal => deal.Id == task.DealId)?.CompanyId;
+        var contactCompanyId = contacts.FirstOrDefault(contact => contact.Id == task.ContactId)?.CompanyId;
+        return dealCompanyId == CompanyId.Value || contactCompanyId == CompanyId.Value;
+    }
+
+    private bool MatchesStageFilter(CrmTaskDto task)
+    {
+        if (!ParsedStage.HasValue)
+        {
+            return true;
+        }
+
+        return string.Equals(
+            deals.FirstOrDefault(deal => deal.Id == task.DealId)?.Stage,
+            ParsedStage.Value.ToString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ClearFilters()
+    {
+        NavigationManager.NavigateTo("/tasks");
+    }
+
+    private string GetDateRangeLabel()
+    {
+        var fromLabel = FromUtc?.ToString("dd MMM") ?? "Any";
+        var toLabel = ToUtc?.ToString("dd MMM") ?? "Any";
+        return $"{fromLabel} → {toLabel}";
+    }
+
+    private string GetSelectedCompanyName()
+    {
+        return contacts.FirstOrDefault(contact => contact.CompanyId == CompanyId)?.CompanyName
+            ?? deals.FirstOrDefault(deal => deal.CompanyId == CompanyId)?.CompanyName
+            ?? "Selected company";
     }
 
     private void OpenCreateTaskModal()

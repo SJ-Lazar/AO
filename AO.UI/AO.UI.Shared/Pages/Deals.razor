@@ -5,6 +5,7 @@
 @using AO.Core.Features.Tasks
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
+@inject NavigationManager NavigationManager
 
 <PageTitle>Deals</PageTitle>
 
@@ -29,6 +30,34 @@
             <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateDealModal">New deal</button>
         </div>
     </section>
+
+    @if (HasActiveFilters)
+    {
+        <section class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Report filters</h2>
+                    <p>This view is narrowed by query-string filters from reports.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="ClearFilters">Clear</button>
+            </div>
+
+            <div class="crm-inline-actions">
+                @if (FromUtc.HasValue || ToUtc.HasValue)
+                {
+                    <span class="crm-badge">@GetDateRangeLabel()</span>
+                }
+                @if (CompanyId.HasValue)
+                {
+                    <span class="crm-badge crm-badge-accent">@GetSelectedCompanyName()</span>
+                }
+                @if (ParsedStage.HasValue)
+                {
+                    <span class="crm-badge crm-badge-warning">@ParsedStage</span>
+                }
+            </div>
+        </section>
+    }
 
     <section class="crm-stat-grid">
         <article class="crm-card crm-stat-card">
@@ -207,6 +236,8 @@
 @code {
     private readonly List<CompanyDto> companies = [];
     private readonly List<ContactDto> contacts = [];
+    private readonly List<DealDto> allDeals = [];
+    private readonly List<CrmTaskDto> allTasks = [];
     private readonly List<DealDto> deals = [];
     private readonly List<CrmTaskDto> tasks = [];
     private bool isLoading;
@@ -221,7 +252,19 @@
     private DealStage selectedDealStage = DealStage.Lead;
     private DealFormModel dealForm = new();
 
-    protected override async Task OnInitializedAsync()
+    [SupplyParameterFromQuery(Name = "fromUtc")]
+    public DateTime? FromUtc { get; set; }
+
+    [SupplyParameterFromQuery(Name = "toUtc")]
+    public DateTime? ToUtc { get; set; }
+
+    [SupplyParameterFromQuery(Name = "companyId")]
+    public Guid? CompanyId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "stage")]
+    public string? StageQuery { get; set; }
+
+    protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
     }
@@ -244,10 +287,12 @@
             companies.AddRange(await companiesTask);
             contacts.Clear();
             contacts.AddRange(await contactsTask);
-            deals.Clear();
-            deals.AddRange(await dealsTask);
-            tasks.Clear();
-            tasks.AddRange(await tasksTask);
+            allDeals.Clear();
+            allDeals.AddRange(await dealsTask);
+            allTasks.Clear();
+            allTasks.AddRange(await tasksTask);
+
+            ApplyFilters();
 
             if (selectedDeal is not null)
             {
@@ -263,6 +308,8 @@
             errorMessage = exception.Message;
             companies.Clear();
             contacts.Clear();
+            allDeals.Clear();
+            allTasks.Clear();
             deals.Clear();
             tasks.Clear();
             selectedDeal = null;
@@ -272,6 +319,48 @@
         {
             isLoading = false;
         }
+    }
+
+    private void ApplyFilters()
+    {
+        var filteredDeals = allDeals
+            .Where(deal => !FromUtc.HasValue || deal.CreatedUtc.Date >= FromUtc.Value.Date)
+            .Where(deal => !ToUtc.HasValue || deal.CreatedUtc.Date <= ToUtc.Value.Date)
+            .Where(deal => !CompanyId.HasValue || deal.CompanyId == CompanyId.Value)
+            .Where(deal => !ParsedStage.HasValue || string.Equals(deal.Stage, ParsedStage.Value.ToString(), StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(deal => deal.UpdatedUtc)
+            .ToList();
+
+        var filteredDealIds = filteredDeals.Select(deal => deal.Id).ToHashSet();
+        var filteredTasks = allTasks
+            .Where(task => task.DealId.HasValue && filteredDealIds.Contains(task.DealId.Value))
+            .ToList();
+
+        deals.Clear();
+        deals.AddRange(filteredDeals);
+        tasks.Clear();
+        tasks.AddRange(filteredTasks);
+    }
+
+    private DealStage? ParsedStage => Enum.TryParse<DealStage>(StageQuery, true, out var stage) ? stage : null;
+
+    private bool HasActiveFilters => FromUtc.HasValue || ToUtc.HasValue || CompanyId.HasValue || ParsedStage.HasValue;
+
+    private void ClearFilters()
+    {
+        NavigationManager.NavigateTo("/deals");
+    }
+
+    private string GetDateRangeLabel()
+    {
+        var fromLabel = FromUtc?.ToString("dd MMM") ?? "Any";
+        var toLabel = ToUtc?.ToString("dd MMM") ?? "Any";
+        return $"{fromLabel} → {toLabel}";
+    }
+
+    private string GetSelectedCompanyName()
+    {
+        return companies.FirstOrDefault(company => company.Id == CompanyId)?.Name ?? "Selected company";
     }
 
     private void OpenCreateDealModal()
