@@ -1,5 +1,6 @@
 using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
+using AO.Core.Features.Users;
 using AO.Tests.Features;
 
 namespace AO.Tests.Features.Contacts;
@@ -30,9 +31,10 @@ public sealed class ContactSliceTests
     {
         await using var scope = await FeatureTestDbScope.CreateAsync();
         var company = new Company { Name = "Scout Regiment" };
+        var user = new CrmUser { FirstName = "Levi", LastName = "Ackerman", Email = "levi@ao.example" };
         var contact = new Contact { FirstName = "Eren", LastName = "Yeager" };
 
-        scope.DbContext.Companies.Add(company);
+        scope.DbContext.AddRange(company, user);
         scope.DbContext.Contacts.Add(contact);
         await scope.DbContext.SaveChangesAsync();
 
@@ -48,6 +50,7 @@ public sealed class ContactSliceTests
                 JobTitle = " Strategist ",
                 Notes = " Key advisor ",
                 CompanyId = company.Id,
+                AssignedUserId = user.Id,
                 IsArchived = true
             },
             CancellationToken.None);
@@ -60,6 +63,8 @@ public sealed class ContactSliceTests
             Assert.That(result.FullName, Is.EqualTo("Armin Arlert"));
             Assert.That(result.CompanyId, Is.EqualTo(company.Id));
             Assert.That(result.CompanyName, Is.EqualTo("Scout Regiment"));
+            Assert.That(result.AssignedUserId, Is.EqualTo(user.Id));
+            Assert.That(result.AssignedUserName, Is.EqualTo("Levi Ackerman"));
             Assert.That(result.IsArchived, Is.True);
         });
     }

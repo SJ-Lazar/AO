@@ -3,6 +3,7 @@
 @using AO.Core.Features.Contacts
 @using AO.Core.Features.Deals
 @using AO.Core.Features.Tasks
+@using AO.Core.Features.Users
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
 @inject NavigationManager NavigationManager
@@ -175,6 +176,16 @@
                     }
                 </InputSelect>
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
         @if (dealForm.CompanyId.HasValue && AvailableDealContacts.Count == 0)
         {
@@ -210,6 +221,13 @@
                     </div>
                     <span class="crm-badge @(selectedDeal.IsClosed ? string.Empty : "crm-badge-accent")">@(selectedDeal.IsClosed ? "Closed" : "Open")</span>
                 </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Assigned user</strong>
+                        <small>@(selectedDeal.AssignedUserName ?? "No user assigned")</small>
+                    </div>
+                    <span class="crm-badge">Owner</span>
+                </div>
                 <label class="crm-field">
                     <span>Stage</span>
                     <InputSelect class="crm-input" @bind-Value="selectedDealStage">
@@ -236,6 +254,7 @@
 @code {
     private readonly List<CompanyDto> companies = [];
     private readonly List<ContactDto> contacts = [];
+    private readonly List<CrmUserDto> users = [];
     private readonly List<DealDto> allDeals = [];
     private readonly List<CrmTaskDto> allTasks = [];
     private readonly List<DealDto> deals = [];
@@ -280,8 +299,9 @@
             var contactsTask = CrmApiClient.GetContactsAsync();
             var dealsTask = CrmApiClient.GetDealsAsync();
             var tasksTask = CrmApiClient.GetTasksAsync();
+            var usersTask = CrmApiClient.GetUsersAsync();
 
-            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask);
+            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask, usersTask);
 
             companies.Clear();
             companies.AddRange(await companiesTask);
@@ -291,6 +311,8 @@
             allDeals.AddRange(await dealsTask);
             allTasks.Clear();
             allTasks.AddRange(await tasksTask);
+            users.Clear();
+            users.AddRange(await usersTask);
 
             ApplyFilters();
 
@@ -310,6 +332,7 @@
             contacts.Clear();
             allDeals.Clear();
             allTasks.Clear();
+            users.Clear();
             deals.Clear();
             tasks.Clear();
             selectedDeal = null;
@@ -413,7 +436,8 @@
                 Stage = dealForm.Stage,
                 ExpectedCloseDateUtc = dealForm.ExpectedCloseDateUtc?.Date,
                 CompanyId = dealForm.CompanyId,
-                ContactId = dealForm.ContactId
+                ContactId = dealForm.ContactId,
+                AssignedUserId = dealForm.AssignedUserId
             });
 
             CloseCreateDealModal();
@@ -488,5 +512,6 @@
         public DateTime? ExpectedCloseDateUtc { get; set; }
         public Guid? CompanyId { get; set; }
         public Guid? ContactId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 }

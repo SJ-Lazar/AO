@@ -1,6 +1,7 @@
 using AO.Core.Features.Activities;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
+using AO.Core.Features.Users;
 using AO.Core.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -15,6 +16,8 @@ public sealed class Company
     public string? Website { get; set; }
     public string? Phone { get; set; }
     public string? Notes { get; set; }
+    public Guid? AssignedUserId { get; set; }
+    public CrmUser? AssignedUser { get; set; }
     public bool IsArchived { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
@@ -30,6 +33,8 @@ public sealed record CompanyDto
     public string? Website { get; init; }
     public string? Phone { get; init; }
     public string? Notes { get; init; }
+    public Guid? AssignedUserId { get; init; }
+    public string? AssignedUserName { get; init; }
     public bool IsArchived { get; init; }
     public int ContactCount { get; init; }
     public int OpenDealCount { get; init; }
@@ -44,6 +49,7 @@ public sealed record CreateCompanyRequest
     public string? Website { get; init; }
     public string? Phone { get; init; }
     public string? Notes { get; init; }
+    public Guid? AssignedUserId { get; init; }
 }
 
 public sealed record UpdateCompanyRequest
@@ -53,6 +59,7 @@ public sealed record UpdateCompanyRequest
     public string? Website { get; init; }
     public string? Phone { get; init; }
     public string? Notes { get; init; }
+    public Guid? AssignedUserId { get; init; }
     public bool IsArchived { get; init; }
 }
 
@@ -79,6 +86,11 @@ internal sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.Property(company => company.Notes)
             .HasMaxLength(2000);
 
+        builder.HasOne(company => company.AssignedUser)
+            .WithMany()
+            .HasForeignKey(company => company.AssignedUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(company => company.Name);
     }
 }
@@ -101,6 +113,7 @@ public static class CompanySlice
     public static async Task<CompanyDto> CreateAsync(AOContext dbContext, CreateCompanyRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Name);
+        await CrmUserSlice.EnsureExistsAsync(dbContext, request.AssignedUserId, cancellationToken);
 
         var entity = new Company
         {
@@ -109,6 +122,7 @@ public static class CompanySlice
             Website = request.Website?.Trim(),
             Phone = request.Phone?.Trim(),
             Notes = request.Notes?.Trim(),
+            AssignedUserId = request.AssignedUserId,
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow
         };
@@ -130,6 +144,7 @@ public static class CompanySlice
     public static async Task<CompanyDto?> UpdateAsync(AOContext dbContext, Guid id, UpdateCompanyRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Name);
+        await CrmUserSlice.EnsureExistsAsync(dbContext, request.AssignedUserId, cancellationToken);
 
         var entity = await dbContext.Companies.FirstOrDefaultAsync(company => company.Id == id, cancellationToken);
         if (entity is null)
@@ -142,6 +157,7 @@ public static class CompanySlice
         entity.Website = request.Website?.Trim();
         entity.Phone = request.Phone?.Trim();
         entity.Notes = request.Notes?.Trim();
+        entity.AssignedUserId = request.AssignedUserId;
         entity.IsArchived = request.IsArchived;
         entity.UpdatedUtc = DateTime.UtcNow;
 
@@ -167,6 +183,8 @@ public static class CompanySlice
             Website = company.Website,
             Phone = company.Phone,
             Notes = company.Notes,
+            AssignedUserId = company.AssignedUserId,
+            AssignedUserName = company.AssignedUser != null ? company.AssignedUser.FirstName + " " + company.AssignedUser.LastName : null,
             IsArchived = company.IsArchived,
             ContactCount = company.Contacts.Count,
             OpenDealCount = company.Deals.Count(deal => !deal.IsClosed),

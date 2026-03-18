@@ -1,6 +1,7 @@
 @page "/contacts"
 @using AO.Core.Features.Companies
 @using AO.Core.Features.Contacts
+@using AO.Core.Features.Users
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
 
@@ -134,6 +135,16 @@
                 <span>Phone</span>
                 <InputText class="crm-input" @bind-Value="companyForm.Phone" />
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="companyForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
         @if (!string.IsNullOrWhiteSpace(companyModalErrorMessage))
         {
@@ -179,6 +190,16 @@
                     }
                 </InputSelect>
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="contactForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
         @if (!string.IsNullOrWhiteSpace(contactModalErrorMessage))
         {
@@ -194,6 +215,7 @@
 @code {
     private readonly List<CompanyDto> companies = [];
     private readonly List<ContactDto> contacts = [];
+    private readonly List<CrmUserDto> users = [];
     private bool isLoading;
     private bool isCreateCompanyModalOpen;
     private bool isCreateContactModalOpen;
@@ -219,18 +241,22 @@
         {
             var companiesTask = CrmApiClient.GetCompaniesAsync();
             var contactsTask = CrmApiClient.GetContactsAsync();
-            await Task.WhenAll(companiesTask, contactsTask);
+            var usersTask = CrmApiClient.GetUsersAsync();
+            await Task.WhenAll(companiesTask, contactsTask, usersTask);
 
             companies.Clear();
             companies.AddRange(await companiesTask);
             contacts.Clear();
             contacts.AddRange((await contactsTask).OrderBy(contact => contact.FirstName).ThenBy(contact => contact.LastName));
+            users.Clear();
+            users.AddRange(await usersTask);
         }
         catch (Exception exception)
         {
             errorMessage = exception.Message;
             companies.Clear();
             contacts.Clear();
+            users.Clear();
         }
         finally
         {
@@ -276,7 +302,8 @@
                 Name = companyForm.Name,
                 Industry = companyForm.Industry,
                 Website = companyForm.Website,
-                Phone = companyForm.Phone
+                Phone = companyForm.Phone,
+                AssignedUserId = companyForm.AssignedUserId
             });
 
             CloseCreateCompanyModal();
@@ -306,7 +333,8 @@
                 Email = contactForm.Email,
                 Phone = contactForm.Phone,
                 JobTitle = contactForm.JobTitle,
-                CompanyId = contactForm.CompanyId
+                CompanyId = contactForm.CompanyId,
+                AssignedUserId = contactForm.AssignedUserId
             });
 
             CloseCreateContactModal();
@@ -324,7 +352,7 @@
 
     private static string GetContactSubtitle(ContactDto contact)
     {
-        var segments = new[] { contact.CompanyName, contact.Email, contact.Phone }
+        var segments = new[] { contact.AssignedUserName, contact.CompanyName, contact.Email, contact.Phone }
             .Where(value => !string.IsNullOrWhiteSpace(value));
 
         return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
@@ -332,7 +360,7 @@
 
     private static string GetCompanySubtitle(CompanyDto company)
     {
-        var segments = new[] { company.Industry, $"{company.ContactCount} contacts", $"{company.OpenDealCount} open deals" }
+        var segments = new[] { company.AssignedUserName, company.Industry, $"{company.ContactCount} contacts", $"{company.OpenDealCount} open deals" }
             .Where(value => !string.IsNullOrWhiteSpace(value));
 
         return string.Join(" • ", segments);
@@ -344,6 +372,7 @@
         public string? Industry { get; set; }
         public string? Website { get; set; }
         public string? Phone { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 
     private sealed class ContactFormModel
@@ -354,5 +383,6 @@
         public string? Phone { get; set; }
         public string? JobTitle { get; set; }
         public Guid? CompanyId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 }

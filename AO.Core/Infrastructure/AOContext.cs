@@ -4,6 +4,7 @@ using AO.Core.Features.Contacts;
 using AO.Core.Features.Dashboard;
 using AO.Core.Features.Deals;
 using AO.Core.Features.Tasks;
+using AO.Core.Features.Users;
 using Microsoft.EntityFrameworkCore;
 
 namespace AO.Core.Infrastructure;
@@ -18,6 +19,8 @@ public class AOContext : DbContext
     public DbSet<Company> Companies => Set<Company>();
 
     public DbSet<CrmActivity> Activities => Set<CrmActivity>();
+
+    public DbSet<CrmUser> Users => Set<CrmUser>();
 
     public DbSet<Contact> Contacts => Set<Contact>();
 

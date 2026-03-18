@@ -1,17 +1,22 @@
 using AO.Core.Features.Activities;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Dashboard;
 using AO.Core.Features.Deals;
 using AO.Core.Features.Reports;
 using AO.Core.Features.Tasks;
+using AO.Core.Features.Users;
 using AO.Core.Shared.ApiResponses;
 
 namespace AO.UI.Shared.Services;
 
-public sealed class CrmApiClient(HttpClient httpClient)
+public sealed class CrmApiClient(HttpClient httpClient, ILogger<CrmApiClient> logger)
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public Task<IReadOnlyList<CompanyDto>> GetCompaniesAsync(CancellationToken cancellationToken = default)
         => SendAsync<IReadOnlyList<CompanyDto>>(HttpMethod.Get, "api/companies", cancellationToken: cancellationToken);
 
@@ -23,6 +28,9 @@ public sealed class CrmApiClient(HttpClient httpClient)
 
     public Task<IReadOnlyList<CrmTaskDto>> GetTasksAsync(CancellationToken cancellationToken = default)
         => SendAsync<IReadOnlyList<CrmTaskDto>>(HttpMethod.Get, "api/tasks", cancellationToken: cancellationToken);
+
+    public Task<IReadOnlyList<CrmUserDto>> GetUsersAsync(CancellationToken cancellationToken = default)
+        => SendAsync<IReadOnlyList<CrmUserDto>>(HttpMethod.Get, "api/users", cancellationToken: cancellationToken);
 
     public Task<DashboardSummaryDto> GetDashboardAsync(CancellationToken cancellationToken = default)
         => SendAsync<DashboardSummaryDto>(HttpMethod.Get, "api/dashboard", cancellationToken: cancellationToken);
@@ -54,38 +62,93 @@ public sealed class CrmApiClient(HttpClient httpClient)
     public Task<CrmTaskDto> CompleteTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
         => SendAsync<CrmTaskDto>(HttpMethod.Patch, $"api/tasks/{taskId}/complete", cancellationToken: cancellationToken);
 
+    public Task<CrmUserDto> CreateUserAsync(CreateCrmUserRequest request, CancellationToken cancellationToken = default)
+        => SendAsync<CrmUserDto>(HttpMethod.Post, "api/users", request, cancellationToken);
+
     private async Task<T> SendAsync<T>(HttpMethod method, string requestUri, object? body = null, CancellationToken cancellationToken = default)
         where T : class
     {
         using var request = new HttpRequestMessage(method, requestUri);
+        var absoluteRequestUri = GetAbsoluteRequestUri(requestUri);
 
         if (body is not null)
         {
             request.Content = JsonContent.Create(body);
         }
 
+        logger.LogInformation("Sending CRM API request {Method} {RequestUri}", method, absoluteRequestUri);
+
         using var response = await httpClient.SendAsync(request, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (response.IsSuccessStatusCode)
         {
-            var envelope = await response.Content.ReadFromJsonAsync<Response<T>>(cancellationToken: cancellationToken);
+            logger.LogDebug("CRM API request succeeded with status code {StatusCode}: {Method} {RequestUri}", (int)response.StatusCode, method, absoluteRequestUri);
+            var envelope = DeserializeResponse<Response<T>>(responseContent);
             if (envelope?.Data is null)
             {
-                throw new InvalidOperationException("The CRM API returned an empty response.");
+                logger.LogWarning("CRM API returned an empty or unexpected success response for {Method} {RequestUri}: {ResponsePreview}", method, absoluteRequestUri, GetResponsePreview(responseContent));
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(responseContent)
+                        ? "The CRM API returned an empty response."
+                        : $"The CRM API returned an unexpected response: {GetResponsePreview(responseContent)}");
             }
 
             return envelope.Data;
         }
 
-        var errorEnvelope = await response.Content.ReadFromJsonAsync<Response<object?>>(cancellationToken: cancellationToken);
+        var errorEnvelope = DeserializeResponse<Response<object?>>(responseContent);
         var errorMessage = errorEnvelope?.Message;
 
         if (string.IsNullOrWhiteSpace(errorMessage))
         {
-            errorMessage = $"CRM API request failed with status code {(int)response.StatusCode}.";
+            errorMessage = string.IsNullOrWhiteSpace(responseContent)
+                ? $"CRM API request failed with status code {(int)response.StatusCode}."
+                : $"CRM API request failed with status code {(int)response.StatusCode}: {GetResponsePreview(responseContent)}";
         }
 
+        logger.LogWarning("CRM API request failed with status code {StatusCode}: {Method} {RequestUri}. Response: {ResponsePreview}", (int)response.StatusCode, method, absoluteRequestUri, GetResponsePreview(responseContent));
+
         throw new InvalidOperationException(errorMessage);
+    }
+
+    private Uri GetAbsoluteRequestUri(string requestUri)
+    {
+        if (Uri.TryCreate(requestUri, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri;
+        }
+
+        return httpClient.BaseAddress is not null
+            ? new Uri(httpClient.BaseAddress, requestUri)
+            : new Uri(requestUri, UriKind.RelativeOrAbsolute);
+    }
+
+    private static TResponse? DeserializeResponse<TResponse>(string responseContent)
+        where TResponse : class
+    {
+        if (string.IsNullOrWhiteSpace(responseContent))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TResponse>(responseContent, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string GetResponsePreview(string responseContent)
+    {
+        const int maxLength = 240;
+        var singleLine = responseContent.Replace("\r", " ").Replace("\n", " ").Trim();
+        return singleLine.Length <= maxLength
+            ? singleLine
+            : singleLine[..maxLength] + "...";
     }
 
     private static string BuildReportsQueryString(GetReportsRequest request)

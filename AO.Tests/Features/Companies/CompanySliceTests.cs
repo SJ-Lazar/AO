@@ -1,6 +1,7 @@
 using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
+using AO.Core.Features.Users;
 using AO.Tests.Features;
 
 namespace AO.Tests.Features.Companies;
@@ -12,6 +13,9 @@ public sealed class CompanySliceTests
     public async Task CreateAsync_WithValidRequest_CreatesCompany()
     {
         await using var scope = await FeatureTestDbScope.CreateAsync();
+        var user = new CrmUser { FirstName = "Levi", LastName = "Ackerman", Email = "levi@ao.example" };
+        scope.DbContext.Users.Add(user);
+        await scope.DbContext.SaveChangesAsync();
 
         var result = await CompanySlice.CreateAsync(
             scope.DbContext,
@@ -21,7 +25,8 @@ public sealed class CompanySliceTests
                 Industry = "  Software  ",
                 Website = " https://acme.example ",
                 Phone = " 12345 ",
-                Notes = " Important account "
+                Notes = " Important account ",
+                AssignedUserId = user.Id
             },
             CancellationToken.None);
 
@@ -33,6 +38,8 @@ public sealed class CompanySliceTests
             Assert.That(result.Website, Is.EqualTo("https://acme.example"));
             Assert.That(result.Phone, Is.EqualTo("12345"));
             Assert.That(result.Notes, Is.EqualTo("Important account"));
+            Assert.That(result.AssignedUserId, Is.EqualTo(user.Id));
+            Assert.That(result.AssignedUserName, Is.EqualTo("Levi Ackerman"));
             Assert.That(result.ContactCount, Is.EqualTo(0));
             Assert.That(result.OpenDealCount, Is.EqualTo(0));
         });

@@ -1,6 +1,7 @@
 using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
+using AO.Core.Features.Users;
 using AO.Tests.Features;
 
 namespace AO.Tests.Features.Deals;
@@ -12,9 +13,10 @@ public sealed class DealSliceTests
     public async Task CreateAsync_WithWonStage_MarksDealAsClosed()
     {
         await using var scope = await FeatureTestDbScope.CreateAsync();
+        var user = new CrmUser { FirstName = "Levi", LastName = "Ackerman", Email = "levi@ao.example" };
         var company = new Company { Name = "Acme" };
         var contact = new Contact { FirstName = "Mikasa", LastName = "Ackerman", Company = company };
-        scope.DbContext.AddRange(company, contact);
+        scope.DbContext.AddRange(company, contact, user);
         await scope.DbContext.SaveChangesAsync();
 
         var result = await DealSlice.CreateAsync(
@@ -26,7 +28,8 @@ public sealed class DealSliceTests
                 Value = 125000m,
                 Stage = DealStage.Won,
                 CompanyId = company.Id,
-                ContactId = contact.Id
+                ContactId = contact.Id,
+                AssignedUserId = user.Id
             },
             CancellationToken.None);
 
@@ -38,6 +41,7 @@ public sealed class DealSliceTests
             Assert.That(result.ClosedUtc, Is.Not.Null);
             Assert.That(result.CompanyName, Is.EqualTo("Acme"));
             Assert.That(result.ContactName, Is.EqualTo("Mikasa Ackerman"));
+            Assert.That(result.AssignedUserName, Is.EqualTo("Levi Ackerman"));
         });
     }
 

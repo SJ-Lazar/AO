@@ -2,6 +2,7 @@ using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
 using AO.Core.Features.Tasks;
+using AO.Core.Features.Users;
 using AO.Tests.Features;
 
 namespace AO.Tests.Features.Tasks;
@@ -30,12 +31,13 @@ public sealed class TaskSliceTests
     public async Task CompleteAsync_WithExistingTask_MarksTaskAsCompleted()
     {
         await using var scope = await FeatureTestDbScope.CreateAsync();
+        var user = new CrmUser { FirstName = "Levi", LastName = "Ackerman", Email = "levi@ao.example" };
         var company = new Company { Name = "Acme" };
         var contact = new Contact { FirstName = "Armin", LastName = "Arlert", Company = company };
         var deal = new Deal { Title = "Renewal", Value = 5000m, Company = company, Contact = contact };
-        var task = new CrmTask { Title = "Prepare summary", Contact = contact, Deal = deal };
+        var task = new CrmTask { Title = "Prepare summary", Contact = contact, Deal = deal, AssignedUser = user };
 
-        scope.DbContext.AddRange(company, contact, deal, task);
+        scope.DbContext.AddRange(company, contact, deal, task, user);
         await scope.DbContext.SaveChangesAsync();
 
         var result = await TaskSlice.CompleteAsync(scope.DbContext, task.Id, CancellationToken.None);
@@ -47,6 +49,7 @@ public sealed class TaskSliceTests
             Assert.That(result.CompletedAtUtc, Is.Not.Null);
             Assert.That(result.ContactName, Is.EqualTo("Armin Arlert"));
             Assert.That(result.DealTitle, Is.EqualTo("Renewal"));
+            Assert.That(result.AssignedUserName, Is.EqualTo("Levi Ackerman"));
         });
     }
 }

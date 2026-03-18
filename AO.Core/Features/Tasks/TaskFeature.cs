@@ -1,6 +1,7 @@
 using AO.Core.Features.Activities;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
+using AO.Core.Features.Users;
 using AO.Core.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -27,6 +28,8 @@ public sealed class CrmTask
     public Contact? Contact { get; set; }
     public Guid? DealId { get; set; }
     public Deal? Deal { get; set; }
+    public Guid? AssignedUserId { get; set; }
+    public CrmUser? AssignedUser { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 }
@@ -44,6 +47,8 @@ public sealed record CrmTaskDto
     public string? ContactName { get; init; }
     public Guid? DealId { get; init; }
     public string? DealTitle { get; init; }
+    public Guid? AssignedUserId { get; init; }
+    public string? AssignedUserName { get; init; }
     public DateTime CreatedUtc { get; init; }
     public DateTime UpdatedUtc { get; init; }
 }
@@ -56,6 +61,7 @@ public sealed record CreateCrmTaskRequest
     public CrmTaskPriority Priority { get; init; } = CrmTaskPriority.Normal;
     public Guid? ContactId { get; init; }
     public Guid? DealId { get; init; }
+    public Guid? AssignedUserId { get; init; }
 }
 
 public sealed record UpdateCrmTaskRequest
@@ -66,6 +72,7 @@ public sealed record UpdateCrmTaskRequest
     public CrmTaskPriority Priority { get; init; } = CrmTaskPriority.Normal;
     public Guid? ContactId { get; init; }
     public Guid? DealId { get; init; }
+    public Guid? AssignedUserId { get; init; }
     public bool IsCompleted { get; init; }
 }
 
@@ -97,6 +104,11 @@ internal sealed class CrmTaskConfiguration : IEntityTypeConfiguration<CrmTask>
             .HasForeignKey(task => task.DealId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(task => task.AssignedUser)
+            .WithMany()
+            .HasForeignKey(task => task.AssignedUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(task => new { task.IsCompleted, task.DueAtUtc });
     }
 }
@@ -120,7 +132,7 @@ public static class TaskSlice
     public static async Task<CrmTaskDto> CreateAsync(AOContext dbContext, CreateCrmTaskRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Title);
-        await EnsureRelatedRecordsExistAsync(dbContext, request.ContactId, request.DealId, cancellationToken);
+        await EnsureRelatedRecordsExistAsync(dbContext, request.ContactId, request.DealId, request.AssignedUserId, cancellationToken);
 
         var entity = new CrmTask
         {
@@ -130,6 +142,7 @@ public static class TaskSlice
             Priority = request.Priority,
             ContactId = request.ContactId,
             DealId = request.DealId,
+            AssignedUserId = request.AssignedUserId,
             CreatedUtc = DateTime.UtcNow,
             UpdatedUtc = DateTime.UtcNow
         };
@@ -153,7 +166,7 @@ public static class TaskSlice
     public static async Task<CrmTaskDto?> UpdateAsync(AOContext dbContext, Guid id, UpdateCrmTaskRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Title);
-        await EnsureRelatedRecordsExistAsync(dbContext, request.ContactId, request.DealId, cancellationToken);
+        await EnsureRelatedRecordsExistAsync(dbContext, request.ContactId, request.DealId, request.AssignedUserId, cancellationToken);
 
         var entity = await dbContext.Tasks.FirstOrDefaultAsync(task => task.Id == id, cancellationToken);
         if (entity is null)
@@ -167,6 +180,7 @@ public static class TaskSlice
         entity.Priority = request.Priority;
         entity.ContactId = request.ContactId;
         entity.DealId = request.DealId;
+        entity.AssignedUserId = request.AssignedUserId;
         entity.IsCompleted = request.IsCompleted;
         entity.CompletedAtUtc = request.IsCompleted ? entity.CompletedAtUtc ?? DateTime.UtcNow : null;
         entity.UpdatedUtc = DateTime.UtcNow;
@@ -226,6 +240,8 @@ public static class TaskSlice
             ContactName = task.Contact != null ? task.Contact.FirstName + " " + task.Contact.LastName : null,
             DealId = task.DealId,
             DealTitle = task.Deal != null ? task.Deal.Title : null,
+            AssignedUserId = task.AssignedUserId,
+            AssignedUserName = task.AssignedUser != null ? task.AssignedUser.FirstName + " " + task.AssignedUser.LastName : null,
             CreatedUtc = task.CreatedUtc,
             UpdatedUtc = task.UpdatedUtc
         });
@@ -239,12 +255,14 @@ public static class TaskSlice
         }
     }
 
-    private static async Task EnsureRelatedRecordsExistAsync(AOContext dbContext, Guid? contactId, Guid? dealId, CancellationToken cancellationToken)
+    private static async Task EnsureRelatedRecordsExistAsync(AOContext dbContext, Guid? contactId, Guid? dealId, Guid? assignedUserId, CancellationToken cancellationToken)
     {
         Guid? resolvedContactId = null;
         Guid? resolvedContactCompanyId = null;
         Guid? resolvedDealContactId = null;
         Guid? resolvedDealCompanyId = null;
+
+        await CrmUserSlice.EnsureExistsAsync(dbContext, assignedUserId, cancellationToken);
 
         if (contactId.HasValue)
         {

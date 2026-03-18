@@ -2,6 +2,7 @@ using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Deals;
 using AO.Core.Features.Tasks;
+using AO.Core.Features.Users;
 using AO.Core.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,12 +13,43 @@ public static class SeedSlice
     public static async Task SeedAsync(AOContext dbContext, CancellationToken cancellationToken = default)
     {
         if (await dbContext.Companies.AnyAsync(cancellationToken)
+            || await dbContext.Users.AnyAsync(cancellationToken)
             || await dbContext.Contacts.AnyAsync(cancellationToken)
             || await dbContext.Deals.AnyAsync(cancellationToken)
             || await dbContext.Tasks.AnyAsync(cancellationToken))
         {
             return;
         }
+
+        var levi = await CrmUserSlice.CreateAsync(
+            dbContext,
+            new CreateCrmUserRequest
+            {
+                FirstName = "Levi",
+                LastName = "Ackerman",
+                Email = "levi@ao.example"
+            },
+            cancellationToken);
+
+        var hange = await CrmUserSlice.CreateAsync(
+            dbContext,
+            new CreateCrmUserRequest
+            {
+                FirstName = "Hange",
+                LastName = "Zoe",
+                Email = "hange@ao.example"
+            },
+            cancellationToken);
+
+        var historia = await CrmUserSlice.CreateAsync(
+            dbContext,
+            new CreateCrmUserRequest
+            {
+                FirstName = "Historia",
+                LastName = "Reiss",
+                Email = "historia@ao.example"
+            },
+            cancellationToken);
 
         var atlas = await CompanySlice.CreateAsync(
             dbContext,
@@ -27,7 +59,8 @@ public static class SeedSlice
                 Industry = "Manufacturing",
                 Website = "https://atlas.example",
                 Phone = "+1 555-0100",
-                Notes = "Strategic account"
+                Notes = "Strategic account",
+                AssignedUserId = levi.Id
             },
             cancellationToken);
 
@@ -39,7 +72,8 @@ public static class SeedSlice
                 Industry = "Logistics",
                 Website = "https://beacon.example",
                 Phone = "+1 555-0140",
-                Notes = "Expansion opportunity"
+                Notes = "Expansion opportunity",
+                AssignedUserId = hange.Id
             },
             cancellationToken);
 
@@ -51,7 +85,8 @@ public static class SeedSlice
                 Industry = "Software",
                 Website = "https://cloud23.example",
                 Phone = "+1 555-0172",
-                Notes = "High-growth customer"
+                Notes = "High-growth customer",
+                AssignedUserId = historia.Id
             },
             cancellationToken);
 
@@ -65,7 +100,8 @@ public static class SeedSlice
                 Phone = "+1 555-0101",
                 JobTitle = "Procurement Lead",
                 CompanyId = atlas.Id,
-                Notes = "Primary decision maker"
+                Notes = "Primary decision maker",
+                AssignedUserId = levi.Id
             },
             cancellationToken);
 
@@ -79,7 +115,8 @@ public static class SeedSlice
                 Phone = "+1 555-0173",
                 JobTitle = "Revenue Operations",
                 CompanyId = cloud.Id,
-                Notes = "Owns platform rollout"
+                Notes = "Owns platform rollout",
+                AssignedUserId = historia.Id
             },
             cancellationToken);
 
@@ -93,7 +130,8 @@ public static class SeedSlice
                 Phone = "+1 555-0141",
                 JobTitle = "Operations Director",
                 CompanyId = beacon.Id,
-                Notes = "Interested in multi-site deployment"
+                Notes = "Interested in multi-site deployment",
+                AssignedUserId = hange.Id
             },
             cancellationToken);
 
@@ -107,7 +145,8 @@ public static class SeedSlice
                 Stage = DealStage.Negotiation,
                 ExpectedCloseDateUtc = DateTime.UtcNow.Date.AddDays(10),
                 CompanyId = atlas.Id,
-                ContactId = mikasa.Id
+                ContactId = mikasa.Id,
+                AssignedUserId = levi.Id
             },
             cancellationToken);
 
@@ -121,7 +160,8 @@ public static class SeedSlice
                 Stage = DealStage.Proposal,
                 ExpectedCloseDateUtc = DateTime.UtcNow.Date.AddDays(21),
                 CompanyId = cloud.Id,
-                ContactId = armin.Id
+                ContactId = armin.Id,
+                AssignedUserId = historia.Id
             },
             cancellationToken);
 
@@ -135,7 +175,8 @@ public static class SeedSlice
                 Stage = DealStage.Qualified,
                 ExpectedCloseDateUtc = DateTime.UtcNow.Date.AddDays(30),
                 CompanyId = beacon.Id,
-                ContactId = eren.Id
+                ContactId = eren.Id,
+                AssignedUserId = hange.Id
             },
             cancellationToken);
 
@@ -148,7 +189,8 @@ public static class SeedSlice
                 DueAtUtc = DateTime.UtcNow.AddDays(-1),
                 Priority = CrmTaskPriority.High,
                 ContactId = mikasa.Id,
-                DealId = renewal.Id
+                DealId = renewal.Id,
+                AssignedUserId = levi.Id
             },
             cancellationToken);
 
@@ -161,7 +203,8 @@ public static class SeedSlice
                 DueAtUtc = DateTime.UtcNow.AddHours(8),
                 Priority = CrmTaskPriority.High,
                 ContactId = armin.Id,
-                DealId = rollout.Id
+                DealId = rollout.Id,
+                AssignedUserId = historia.Id
             },
             cancellationToken);
 
@@ -174,7 +217,8 @@ public static class SeedSlice
                 DueAtUtc = DateTime.UtcNow.AddDays(2),
                 Priority = CrmTaskPriority.Normal,
                 ContactId = eren.Id,
-                DealId = expansion.Id
+                DealId = expansion.Id,
+                AssignedUserId = hange.Id
             },
             cancellationToken);
 

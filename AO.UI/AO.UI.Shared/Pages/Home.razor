@@ -5,6 +5,7 @@
 @using AO.Core.Features.Dashboard
 @using AO.Core.Features.Deals
 @using AO.Core.Features.Tasks
+@using AO.Core.Features.Users
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
 @inject IFormFactor FormFactor
@@ -51,6 +52,11 @@
             <span class="crm-stat-label">Tasks</span>
             <strong>@dashboardSummary.OpenTaskCount</strong>
             <span class="crm-badge crm-badge-warning">@dashboardSummary.OverdueTaskCount overdue</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Users</span>
+            <strong>@users.Count</strong>
+            <span class="crm-badge crm-badge-success">Assignable team</span>
         </article>
         
     </section>
@@ -113,7 +119,7 @@
                     {
                         <button type="button" class="crm-table-row crm-table-button" @onclick="() => OpenDealDialog(deal.Id)">
                             <span>@deal.Title</span>
-                            <span>@(string.IsNullOrWhiteSpace(deal.ContactName) ? "Unassigned" : deal.ContactName)</span>
+                            <span>@GetDealOwner(deal)</span>
                             <span>@FormatCurrency(deal.Value)</span>
                             <span><span class="crm-badge @(GetDealStageBadgeClass(deal.Stage))">@deal.Stage</span></span>
                         </button>
@@ -305,6 +311,16 @@
                 <span>Phone</span>
                 <InputText class="crm-input" @bind-Value="companyForm.Phone" />
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="companyForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(companyModalErrorMessage))
@@ -348,6 +364,16 @@
                     @foreach (var company in companies)
                     {
                         <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="contactForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
                     }
                 </InputSelect>
             </label>
@@ -408,6 +434,16 @@
                     }
                 </InputSelect>
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(dealModalErrorMessage))
@@ -462,6 +498,16 @@
                     @foreach (var deal in deals)
                     {
                         <option value="@deal.Id">@deal.Title</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
                     }
                 </InputSelect>
             </label>
@@ -545,6 +591,7 @@
     private readonly List<ContactDto> contacts = [];
     private readonly List<DealDto> deals = [];
     private readonly List<CrmTaskDto> tasks = [];
+    private readonly List<CrmUserDto> users = [];
     private readonly List<CrmActivityDto> recentActivities = [];
     private readonly HashSet<Guid> completingTaskIds = [];
     private DashboardSummaryDto dashboardSummary = new();
@@ -588,10 +635,11 @@
             var contactsTask = CrmApiClient.GetContactsAsync();
             var dealsTask = CrmApiClient.GetDealsAsync();
             var tasksTask = CrmApiClient.GetTasksAsync();
+            var usersTask = CrmApiClient.GetUsersAsync();
             var dashboardTask = CrmApiClient.GetDashboardAsync();
             var activitiesTask = CrmApiClient.GetActivitiesAsync(12);
 
-            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask, dashboardTask, activitiesTask);
+            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask, usersTask, dashboardTask, activitiesTask);
 
             companies.Clear();
             companies.AddRange(await companiesTask);
@@ -604,6 +652,9 @@
 
             tasks.Clear();
             tasks.AddRange(await tasksTask);
+
+            users.Clear();
+            users.AddRange(await usersTask);
 
             recentActivities.Clear();
             recentActivities.AddRange(await activitiesTask);
@@ -622,6 +673,7 @@
             contacts.Clear();
             deals.Clear();
             tasks.Clear();
+            users.Clear();
             recentActivities.Clear();
             dashboardSummary = new DashboardSummaryDto();
         }
@@ -724,7 +776,8 @@
                 Name = companyForm.Name,
                 Industry = companyForm.Industry,
                 Website = companyForm.Website,
-                Phone = companyForm.Phone
+                Phone = companyForm.Phone,
+                AssignedUserId = companyForm.AssignedUserId
             });
 
             CloseCreateCompanyModal();
@@ -754,7 +807,8 @@
                 Email = contactForm.Email,
                 Phone = contactForm.Phone,
                 JobTitle = contactForm.JobTitle,
-                CompanyId = contactForm.CompanyId
+                CompanyId = contactForm.CompanyId,
+                AssignedUserId = contactForm.AssignedUserId
             });
 
             CloseCreateContactModal();
@@ -785,7 +839,8 @@
                 Stage = dealForm.Stage,
                 ExpectedCloseDateUtc = NormalizeDateUtc(dealForm.ExpectedCloseDateUtc),
                 CompanyId = dealForm.CompanyId,
-                ContactId = dealForm.ContactId
+                ContactId = dealForm.ContactId,
+                AssignedUserId = dealForm.AssignedUserId
             });
 
             CloseCreateDealModal();
@@ -815,7 +870,8 @@
                 DueAtUtc = NormalizeDateUtc(taskForm.DueAtUtc),
                 Priority = taskForm.Priority,
                 ContactId = taskForm.ContactId,
-                DealId = taskForm.DealId
+                DealId = taskForm.DealId,
+                AssignedUserId = taskForm.AssignedUserId
             });
 
             CloseCreateTaskModal();
@@ -903,7 +959,7 @@
 
     private static string GetContactSubtitle(ContactDto contact)
     {
-        var segments = new[] { contact.CompanyName, contact.Email, contact.Phone }
+        var segments = new[] { contact.AssignedUserName, contact.CompanyName, contact.Email, contact.Phone }
             .Where(value => !string.IsNullOrWhiteSpace(value));
 
         return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
@@ -914,6 +970,7 @@
         var segments = new[]
         {
             company.Industry,
+            company.AssignedUserName,
             $"{company.ContactCount} contacts",
             $"{company.OpenDealCount} open deals"
         }.Where(value => !string.IsNullOrWhiteSpace(value));
@@ -923,10 +980,25 @@
 
     private static string GetTaskSubtitle(CrmTaskDto task)
     {
-        var segments = new[] { task.ContactName, task.DealTitle, task.Description }
+        var segments = new[] { task.AssignedUserName, task.ContactName, task.DealTitle, task.Description }
             .Where(value => !string.IsNullOrWhiteSpace(value));
 
         return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetDealOwner(DealDto deal)
+    {
+        if (!string.IsNullOrWhiteSpace(deal.AssignedUserName))
+        {
+            return deal.AssignedUserName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(deal.ContactName))
+        {
+            return deal.ContactName;
+        }
+
+        return "Unassigned";
     }
 
     private static string GetTaskBadge(CrmTaskDto task)
@@ -1009,6 +1081,7 @@
         public string? Phone { get; set; }
         public string? JobTitle { get; set; }
         public Guid? CompanyId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 
     private sealed class CompanyFormModel
@@ -1017,6 +1090,7 @@
         public string? Industry { get; set; }
         public string? Website { get; set; }
         public string? Phone { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 
     private sealed class DealFormModel
@@ -1028,6 +1102,7 @@
         public DateTime? ExpectedCloseDateUtc { get; set; }
         public Guid? CompanyId { get; set; }
         public Guid? ContactId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 
     private sealed class TaskFormModel
@@ -1038,5 +1113,6 @@
         public CrmTaskPriority Priority { get; set; } = CrmTaskPriority.Normal;
         public Guid? ContactId { get; set; }
         public Guid? DealId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
 }

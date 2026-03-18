@@ -2,6 +2,7 @@
 @using AO.Core.Features.Tasks
 @using AO.Core.Features.Contacts
 @using AO.Core.Features.Deals
+@using AO.Core.Features.Users
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
 @inject NavigationManager NavigationManager
@@ -98,22 +99,39 @@
                 }
                 else
                 {
-                    @foreach (var task in tasks)
-                    {
-                        <div class="crm-list-item">
-                            <div>
-                                <strong>@task.Title</strong>
-                                <small>@GetTaskSubtitle(task)</small>
-                            </div>
-                            <div class="crm-list-item-actions">
-                                <span class="crm-badge @(task.IsCompleted ? "crm-badge-success" : task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date ? "crm-badge-warning" : string.Empty)">@GetTaskBadge(task)</span>
-                                @if (!task.IsCompleted)
-                                {
-                                    <button type="button" class="crm-chip-button" @onclick="() => CompleteTaskAsync(task.Id)" disabled="@completingTaskIds.Contains(task.Id)">@(completingTaskIds.Contains(task.Id) ? "..." : "Done")</button>
-                                }
-                            </div>
-                        </div>
-                    }
+                    <div class="crm-task-groups">
+                        @foreach (var group in TaskGroups.Where(group => group.Tasks.Count > 0))
+                        {
+                            <section class="crm-task-group">
+                                <div class="crm-task-group-header">
+                                    <div>
+                                        <strong>@group.Title</strong>
+                                        <small>@group.Subtitle</small>
+                                    </div>
+                                    <span class="crm-badge @group.BadgeClass">@group.Tasks.Count</span>
+                                </div>
+
+                                <div class="crm-stack-list">
+                                    @foreach (var task in group.Tasks)
+                                    {
+                                        <div class="crm-list-item">
+                                            <div>
+                                                <strong>@task.Title</strong>
+                                                <small>@GetTaskSubtitle(task)</small>
+                                            </div>
+                                            <div class="crm-list-item-actions">
+                                                <span class="crm-badge @(task.IsCompleted ? "crm-badge-success" : task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date ? "crm-badge-warning" : string.Empty)">@GetTaskBadge(task)</span>
+                                                @if (!task.IsCompleted)
+                                                {
+                                                    <button type="button" class="crm-chip-button" @onclick="() => CompleteTaskAsync(task.Id)" disabled="@completingTaskIds.Contains(task.Id)">@(completingTaskIds.Contains(task.Id) ? "..." : "Done")</button>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </section>
+                        }
+                    </div>
                 }
             </div>
         </article>
@@ -164,6 +182,16 @@
                     }
                 </InputSelect>
             </label>
+            <label>
+                <span>Assigned user</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.AssignedUserId">
+                    <option value="">No user</option>
+                    @foreach (var user in users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
         @if (taskForm.DealId.HasValue && AvailableTaskContacts.Count == 0)
         {
@@ -183,6 +211,7 @@
 @code {
     private readonly List<ContactDto> contacts = [];
     private readonly List<DealDto> deals = [];
+    private readonly List<CrmUserDto> users = [];
     private readonly List<CrmTaskDto> allTasks = [];
     private readonly List<CrmTaskDto> tasks = [];
     private readonly HashSet<Guid> completingTaskIds = [];
@@ -220,12 +249,15 @@
             var contactsTask = CrmApiClient.GetContactsAsync();
             var dealsTask = CrmApiClient.GetDealsAsync();
             var tasksTask = CrmApiClient.GetTasksAsync();
-            await Task.WhenAll(contactsTask, dealsTask, tasksTask);
+            var usersTask = CrmApiClient.GetUsersAsync();
+            await Task.WhenAll(contactsTask, dealsTask, tasksTask, usersTask);
 
             contacts.Clear();
             contacts.AddRange(await contactsTask);
             deals.Clear();
             deals.AddRange(await dealsTask);
+            users.Clear();
+            users.AddRange(await usersTask);
             allTasks.Clear();
             allTasks.AddRange(await tasksTask);
 
@@ -236,6 +268,7 @@
             errorMessage = exception.Message;
             contacts.Clear();
             deals.Clear();
+            users.Clear();
             allTasks.Clear();
             tasks.Clear();
         }
@@ -263,7 +296,35 @@
 
     private DealStage? ParsedStage => Enum.TryParse<DealStage>(StageQuery, true, out var stage) ? stage : null;
 
+    private IReadOnlyList<TaskGroupModel> TaskGroups =>
+    [
+        new("Overdue", "Tasks that need attention first.", "crm-badge-warning", tasks.Where(IsOverdue).ToList()),
+        new("Due today", "Tasks scheduled for today.", "crm-badge-accent", tasks.Where(IsDueToday).ToList()),
+        new("Upcoming", "Open tasks scheduled later or without a due date.", string.Empty, tasks.Where(IsUpcoming).ToList()),
+        new("Completed", "Finished tasks kept for quick review.", "crm-badge-success", tasks.Where(task => task.IsCompleted).ToList())
+    ];
+
     private bool HasActiveFilters => FromUtc.HasValue || ToUtc.HasValue || CompanyId.HasValue || ParsedStage.HasValue;
+
+    private static bool IsOverdue(CrmTaskDto task)
+    {
+        return !task.IsCompleted
+            && task.DueAtUtc.HasValue
+            && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date;
+    }
+
+    private static bool IsDueToday(CrmTaskDto task)
+    {
+        return !task.IsCompleted
+            && task.DueAtUtc.HasValue
+            && task.DueAtUtc.Value.Date == DateTime.UtcNow.Date;
+    }
+
+    private static bool IsUpcoming(CrmTaskDto task)
+    {
+        return !task.IsCompleted
+            && (!task.DueAtUtc.HasValue || task.DueAtUtc.Value.Date > DateTime.UtcNow.Date);
+    }
 
     private bool MatchesCompanyFilter(CrmTaskDto task)
     {
@@ -336,7 +397,8 @@
                 DueAtUtc = taskForm.DueAtUtc?.Date,
                 Priority = taskForm.Priority,
                 ContactId = taskForm.ContactId,
-                DealId = taskForm.DealId
+                DealId = taskForm.DealId,
+                AssignedUserId = taskForm.AssignedUserId
             });
 
             CloseCreateTaskModal();
@@ -376,7 +438,7 @@
 
     private static string GetTaskSubtitle(CrmTaskDto task)
     {
-        var segments = new[] { task.ContactName, task.DealTitle, task.Description }
+        var segments = new[] { task.AssignedUserName, task.ContactName, task.DealTitle, task.Description }
             .Where(value => !string.IsNullOrWhiteSpace(value));
 
         return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
@@ -442,5 +504,8 @@
         public CrmTaskPriority Priority { get; set; } = CrmTaskPriority.Normal;
         public Guid? ContactId { get; set; }
         public Guid? DealId { get; set; }
+        public Guid? AssignedUserId { get; set; }
     }
+
+    private sealed record TaskGroupModel(string Title, string Subtitle, string BadgeClass, IReadOnlyList<CrmTaskDto> Tasks);
 }

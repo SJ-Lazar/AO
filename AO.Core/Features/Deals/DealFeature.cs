@@ -1,6 +1,7 @@
 using AO.Core.Features.Activities;
 using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
+using AO.Core.Features.Users;
 using AO.Core.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -29,6 +30,8 @@ public sealed class Deal
     public Company? Company { get; set; }
     public Guid? ContactId { get; set; }
     public Contact? Contact { get; set; }
+    public Guid? AssignedUserId { get; set; }
+    public CrmUser? AssignedUser { get; set; }
     public bool IsClosed { get; set; }
     public DateTime? ClosedUtc { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
@@ -47,6 +50,8 @@ public sealed record DealDto
     public string? CompanyName { get; init; }
     public Guid? ContactId { get; init; }
     public string? ContactName { get; init; }
+    public Guid? AssignedUserId { get; init; }
+    public string? AssignedUserName { get; init; }
     public bool IsClosed { get; init; }
     public DateTime? ClosedUtc { get; init; }
     public DateTime CreatedUtc { get; init; }
@@ -62,6 +67,7 @@ public sealed record CreateDealRequest
     public DateTime? ExpectedCloseDateUtc { get; init; }
     public Guid? CompanyId { get; init; }
     public Guid? ContactId { get; init; }
+    public Guid? AssignedUserId { get; init; }
 }
 
 public sealed record UpdateDealRequest
@@ -73,6 +79,7 @@ public sealed record UpdateDealRequest
     public DateTime? ExpectedCloseDateUtc { get; init; }
     public Guid? CompanyId { get; init; }
     public Guid? ContactId { get; init; }
+    public Guid? AssignedUserId { get; init; }
 }
 
 public sealed record SetDealStageRequest
@@ -111,6 +118,11 @@ internal sealed class DealConfiguration : IEntityTypeConfiguration<Deal>
             .HasForeignKey(deal => deal.ContactId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(deal => deal.AssignedUser)
+            .WithMany()
+            .HasForeignKey(deal => deal.AssignedUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(deal => deal.Stage);
     }
 }
@@ -133,7 +145,7 @@ public static class DealSlice
     public static async Task<DealDto> CreateAsync(AOContext dbContext, CreateDealRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Title, request.Value);
-        await EnsureRelatedRecordsExistAsync(dbContext, request.CompanyId, request.ContactId, cancellationToken);
+        await EnsureRelatedRecordsExistAsync(dbContext, request.CompanyId, request.ContactId, request.AssignedUserId, cancellationToken);
 
         var entity = new Deal
         {
@@ -144,6 +156,7 @@ public static class DealSlice
             ExpectedCloseDateUtc = request.ExpectedCloseDateUtc,
             CompanyId = request.CompanyId,
             ContactId = request.ContactId,
+            AssignedUserId = request.AssignedUserId,
             IsClosed = IsClosedStage(request.Stage),
             ClosedUtc = IsClosedStage(request.Stage) ? DateTime.UtcNow : null,
             CreatedUtc = DateTime.UtcNow,
@@ -169,7 +182,7 @@ public static class DealSlice
     public static async Task<DealDto?> UpdateAsync(AOContext dbContext, Guid id, UpdateDealRequest request, CancellationToken cancellationToken)
     {
         Validate(request.Title, request.Value);
-        await EnsureRelatedRecordsExistAsync(dbContext, request.CompanyId, request.ContactId, cancellationToken);
+        await EnsureRelatedRecordsExistAsync(dbContext, request.CompanyId, request.ContactId, request.AssignedUserId, cancellationToken);
 
         var entity = await dbContext.Deals.FirstOrDefaultAsync(deal => deal.Id == id, cancellationToken);
         if (entity is null)
@@ -184,6 +197,7 @@ public static class DealSlice
         entity.ExpectedCloseDateUtc = request.ExpectedCloseDateUtc;
         entity.CompanyId = request.CompanyId;
         entity.ContactId = request.ContactId;
+        entity.AssignedUserId = request.AssignedUserId;
         entity.IsClosed = IsClosedStage(request.Stage);
         entity.ClosedUtc = entity.IsClosed ? entity.ClosedUtc ?? DateTime.UtcNow : null;
         entity.UpdatedUtc = DateTime.UtcNow;
@@ -243,6 +257,8 @@ public static class DealSlice
             CompanyName = deal.Company != null ? deal.Company.Name : null,
             ContactId = deal.ContactId,
             ContactName = deal.Contact != null ? deal.Contact.FirstName + " " + deal.Contact.LastName : null,
+            AssignedUserId = deal.AssignedUserId,
+            AssignedUserName = deal.AssignedUser != null ? deal.AssignedUser.FirstName + " " + deal.AssignedUser.LastName : null,
             IsClosed = deal.IsClosed,
             ClosedUtc = deal.ClosedUtc,
             CreatedUtc = deal.CreatedUtc,
@@ -263,9 +279,11 @@ public static class DealSlice
         }
     }
 
-    private static async Task EnsureRelatedRecordsExistAsync(AOContext dbContext, Guid? companyId, Guid? contactId, CancellationToken cancellationToken)
+    private static async Task EnsureRelatedRecordsExistAsync(AOContext dbContext, Guid? companyId, Guid? contactId, Guid? assignedUserId, CancellationToken cancellationToken)
     {
         Guid? contactCompanyId = null;
+
+        await CrmUserSlice.EnsureExistsAsync(dbContext, assignedUserId, cancellationToken);
 
         if (companyId.HasValue)
         {

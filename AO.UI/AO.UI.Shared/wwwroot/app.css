@@ -500,6 +500,33 @@ app,
     gap: var(--crm-gap-xs);
 }
 
+.crm-task-groups,
+.crm-task-group {
+    display: grid;
+    gap: var(--crm-gap-md);
+}
+
+.crm-task-group-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--crm-gap-sm);
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.crm-task-group-header strong {
+    display: block;
+    font-size: 0.82rem;
+}
+
+.crm-task-group-header small {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+}
+
 .crm-stage-button,
 .crm-list-button {
     border: 0;

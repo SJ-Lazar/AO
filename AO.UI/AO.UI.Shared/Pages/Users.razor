@@ -1,0 +1,187 @@
+@page "/users"
+@using AO.Core.Features.Users
+@using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
+
+<PageTitle>Users</PageTitle>
+
+<div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading users...</div>
+    }
+
+    <section class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Team</span>
+            <h1>Users</h1>
+            <p>Create assignable CRM users for companies, contacts, deals, and tasks.</p>
+        </div>
+        <div class="crm-hero-actions">
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateUserModal">New user</button>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Users</span>
+            <strong>@users.Count</strong>
+            <span class="crm-badge crm-badge-success">@users.Count(user => user.IsActive) active</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Team members</h2>
+                    <p>Users available for CRM assignment.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateUserModal">Create</button>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (users.Count == 0)
+                {
+                    <div class="crm-empty-state">No users found. Create a user to start assigning CRM records.</div>
+                }
+                else
+                {
+                    @foreach (var user in users)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@user.FullName</strong>
+                                <small>@GetUserSubtitle(user)</small>
+                            </div>
+                            <span class="crm-badge @(user.IsActive ? "crm-badge-success" : string.Empty)">@(user.IsActive ? "Active" : "Inactive")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+</div>
+
+<CrmModal IsOpen="isCreateUserModalOpen" Title="Create user" Subtitle="Add a CRM assignee" Size="Medium" OnClose="CloseCreateUserModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>First name</span>
+                <InputText class="crm-input" @bind-Value="userForm.FirstName" />
+            </label>
+            <label>
+                <span>Last name</span>
+                <InputText class="crm-input" @bind-Value="userForm.LastName" />
+            </label>
+            <label>
+                <span>Email</span>
+                <InputText class="crm-input" @bind-Value="userForm.Email" />
+            </label>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(userModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@userModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateUserModal" disabled="@isSavingUser">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveUserAsync" disabled="@isSavingUser">@(isSavingUser ? "Saving..." : "Save user")</button>
+    </FooterContent>
+</CrmModal>
+
+@code {
+    private readonly List<CrmUserDto> users = [];
+    private bool isLoading;
+    private bool isCreateUserModalOpen;
+    private bool isSavingUser;
+    private string? errorMessage;
+    private string? userModalErrorMessage;
+    private UserFormModel userForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            users.Clear();
+            users.AddRange(await CrmApiClient.GetUsersAsync());
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            users.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateUserModal()
+    {
+        userForm = new UserFormModel();
+        userModalErrorMessage = null;
+        isCreateUserModalOpen = true;
+    }
+
+    private void CloseCreateUserModal()
+    {
+        userModalErrorMessage = null;
+        isCreateUserModalOpen = false;
+    }
+
+    private async Task SaveUserAsync()
+    {
+        isSavingUser = true;
+        userModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateUserAsync(new CreateCrmUserRequest
+            {
+                FirstName = userForm.FirstName,
+                LastName = userForm.LastName,
+                Email = userForm.Email
+            });
+
+            CloseCreateUserModal();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            userModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingUser = false;
+        }
+    }
+
+    private static string GetUserSubtitle(CrmUserDto user)
+    {
+        return string.IsNullOrWhiteSpace(user.Email)
+            ? "Assignable CRM user"
+            : user.Email;
+    }
+
+    private sealed class UserFormModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+    }
+}
