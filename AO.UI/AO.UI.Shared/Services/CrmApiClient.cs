@@ -4,6 +4,7 @@ using AO.Core.Features.Companies;
 using AO.Core.Features.Contacts;
 using AO.Core.Features.Dashboard;
 using AO.Core.Features.Deals;
+using AO.Core.Features.Reports;
 using AO.Core.Features.Tasks;
 using AO.Core.Shared.ApiResponses;
 
@@ -25,6 +26,12 @@ public sealed class CrmApiClient(HttpClient httpClient)
 
     public Task<DashboardSummaryDto> GetDashboardAsync(CancellationToken cancellationToken = default)
         => SendAsync<DashboardSummaryDto>(HttpMethod.Get, "api/dashboard", cancellationToken: cancellationToken);
+
+    public Task<ReportSnapshotDto> GetReportsAsync(GetReportsRequest request, CancellationToken cancellationToken = default)
+        => SendAsync<ReportSnapshotDto>(HttpMethod.Get, $"api/reports{BuildReportsQueryString(request)}", cancellationToken: cancellationToken);
+
+    public Task<ReportExportDto> GetReportsExportAsync(GetReportsRequest request, CancellationToken cancellationToken = default)
+        => SendAsync<ReportExportDto>(HttpMethod.Get, $"api/reports/export{BuildReportsQueryString(request)}", cancellationToken: cancellationToken);
 
     public Task<IReadOnlyList<CrmActivityDto>> GetActivitiesAsync(int take = 10, CancellationToken cancellationToken = default)
         => SendAsync<IReadOnlyList<CrmActivityDto>>(HttpMethod.Get, $"api/activities?take={take}", cancellationToken: cancellationToken);
@@ -79,5 +86,32 @@ public sealed class CrmApiClient(HttpClient httpClient)
         }
 
         throw new InvalidOperationException(errorMessage);
+    }
+
+    private static string BuildReportsQueryString(GetReportsRequest request)
+    {
+        var parameters = new List<string>();
+
+        if (request.FromUtc.HasValue)
+        {
+            parameters.Add($"fromUtc={Uri.EscapeDataString(request.FromUtc.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (request.ToUtc.HasValue)
+        {
+            parameters.Add($"toUtc={Uri.EscapeDataString(request.ToUtc.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (request.CompanyId.HasValue)
+        {
+            parameters.Add($"companyId={Uri.EscapeDataString(request.CompanyId.Value.ToString())}");
+        }
+
+        if (request.Stage.HasValue)
+        {
+            parameters.Add($"stage={Uri.EscapeDataString(request.Stage.Value.ToString())}");
+        }
+
+        return parameters.Count == 0 ? string.Empty : $"?{string.Join("&", parameters)}";
     }
 }

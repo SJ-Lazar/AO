@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
+@using System.Text.Json
+@inject IJSRuntime JS
 
-<div class="crm-shell @(isDarkTheme ? "theme-dark" : "theme-light") @(isNavigationOpen ? "nav-open" : string.Empty)">
+<div class="crm-shell @(isDarkTheme ? "theme-dark" : "theme-light") @(isNavigationOpen ? "nav-open" : string.Empty)" style="@GetThemeStyle()">
     <button type="button" class="crm-overlay" aria-label="Close navigation" @onclick="CloseNavigation"></button>
 
     <aside class="crm-sidebar-shell">
@@ -24,7 +26,7 @@
 
             <div class="crm-topbar-actions">
                 <button type="button" class="crm-chip-button" @onclick="ToggleTheme">@(isDarkTheme ? "Dark" : "Light")</button>
-                <button type="button" class="crm-icon-button">＋</button>
+                <button type="button" class="crm-icon-button" aria-label="Open theme settings" @onclick="OpenThemeSettingsModal">⚙</button>
             </div>
         </header>
 
@@ -36,6 +38,54 @@
     </div>
 </div>
 
+<CrmModal IsOpen="isThemeSettingsModalOpen" Title="Theme settings" Subtitle="Save the main application colors and default theme" Size="Medium" OnClose="CloseThemeSettingsModal">
+    <ChildContent>
+        <div class="crm-theme-settings-grid">
+            <label class="crm-field">
+                <span>Default theme</span>
+                <InputSelect class="crm-input" @bind-Value="themeSettingsDraft.DefaultTheme">
+                    <option value="Light">Light</option>
+                    <option value="Dark">Dark</option>
+                </InputSelect>
+            </label>
+
+            <label class="crm-field crm-color-field">
+                <span>Accent color</span>
+                <div class="crm-color-input-shell">
+                    <input type="color" class="crm-color-picker" @bind="themeSettingsDraft.AccentColor" />
+                    <InputText class="crm-input" @bind-Value="themeSettingsDraft.AccentColor" />
+                </div>
+            </label>
+
+            <label class="crm-field crm-color-field">
+                <span>Success color</span>
+                <div class="crm-color-input-shell">
+                    <input type="color" class="crm-color-picker" @bind="themeSettingsDraft.SuccessColor" />
+                    <InputText class="crm-input" @bind-Value="themeSettingsDraft.SuccessColor" />
+                </div>
+            </label>
+
+            <label class="crm-field crm-color-field">
+                <span>Warning color</span>
+                <div class="crm-color-input-shell">
+                    <input type="color" class="crm-color-picker" @bind="themeSettingsDraft.WarningColor" />
+                    <InputText class="crm-input" @bind-Value="themeSettingsDraft.WarningColor" />
+                </div>
+            </label>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(themeSettingsErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@themeSettingsErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="ResetThemeSettingsDraft" disabled="@isSavingThemeSettings">Reset</button>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseThemeSettingsModal" disabled="@isSavingThemeSettings">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveThemeSettingsAsync" disabled="@isSavingThemeSettings">@(isSavingThemeSettings ? "Saving..." : "Save colors")</button>
+    </FooterContent>
+</CrmModal>
+
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
@@ -43,12 +93,102 @@
 </div>
 
 @code {
+    private const string ThemeSettingsStorageKey = "ao.crm.theme.settings";
+    private const string DefaultAccentColor = "#df3f74";
+    private const string DefaultSuccessColor = "#299b74";
+    private const string DefaultWarningColor = "#c9891f";
+    private const string LightTheme = "Light";
+    private const string DarkTheme = "Dark";
+
     private bool isDarkTheme;
     private bool isNavigationOpen;
+    private bool isThemeSettingsModalOpen;
+    private bool isSavingThemeSettings;
+    private string? themeSettingsErrorMessage;
+    private ThemeSettingsModel appliedThemeSettings = ThemeSettingsModel.Default();
+    private ThemeSettingsModel themeSettingsDraft = ThemeSettingsModel.Default();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            var savedSettingsJson = await JS.InvokeAsync<string?>("crmThemeSettings.load", ThemeSettingsStorageKey);
+            if (string.IsNullOrWhiteSpace(savedSettingsJson))
+            {
+                return;
+            }
+
+            var savedSettings = JsonSerializer.Deserialize<ThemeSettingsModel>(savedSettingsJson);
+            if (savedSettings is null)
+            {
+                return;
+            }
+
+            appliedThemeSettings = ThemeSettingsModel.Normalize(savedSettings);
+            themeSettingsDraft = appliedThemeSettings.Clone();
+            isDarkTheme = string.Equals(appliedThemeSettings.DefaultTheme, DarkTheme, StringComparison.OrdinalIgnoreCase);
+            StateHasChanged();
+        }
+        catch
+        {
+        }
+    }
 
     private void ToggleTheme()
     {
         isDarkTheme = !isDarkTheme;
+    }
+
+    private void OpenThemeSettingsModal()
+    {
+        themeSettingsDraft = appliedThemeSettings.Clone();
+        themeSettingsErrorMessage = null;
+        isThemeSettingsModalOpen = true;
+    }
+
+    private void CloseThemeSettingsModal()
+    {
+        themeSettingsErrorMessage = null;
+        isThemeSettingsModalOpen = false;
+    }
+
+    private void ResetThemeSettingsDraft()
+    {
+        themeSettingsDraft = ThemeSettingsModel.Default();
+        themeSettingsErrorMessage = null;
+    }
+
+    private async Task SaveThemeSettingsAsync()
+    {
+        isSavingThemeSettings = true;
+        themeSettingsErrorMessage = null;
+
+        try
+        {
+            appliedThemeSettings = ThemeSettingsModel.Normalize(themeSettingsDraft);
+            themeSettingsDraft = appliedThemeSettings.Clone();
+            isDarkTheme = string.Equals(appliedThemeSettings.DefaultTheme, DarkTheme, StringComparison.OrdinalIgnoreCase);
+
+            await JS.InvokeVoidAsync(
+                "crmThemeSettings.save",
+                ThemeSettingsStorageKey,
+                JsonSerializer.Serialize(appliedThemeSettings));
+
+            CloseThemeSettingsModal();
+        }
+        catch (Exception exception)
+        {
+            themeSettingsErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingThemeSettings = false;
+        }
     }
 
     private void ToggleNavigation()
@@ -59,5 +199,76 @@
     private void CloseNavigation()
     {
         isNavigationOpen = false;
+    }
+
+    private string GetThemeStyle()
+    {
+        return $"--color-accent: {appliedThemeSettings.AccentColor}; --color-success: {appliedThemeSettings.SuccessColor}; --color-warning: {appliedThemeSettings.WarningColor};";
+    }
+
+    private sealed class ThemeSettingsModel
+    {
+        public string DefaultTheme { get; set; } = LightTheme;
+        public string AccentColor { get; set; } = DefaultAccentColor;
+        public string SuccessColor { get; set; } = DefaultSuccessColor;
+        public string WarningColor { get; set; } = DefaultWarningColor;
+
+        public ThemeSettingsModel Clone()
+        {
+            return new ThemeSettingsModel
+            {
+                DefaultTheme = DefaultTheme,
+                AccentColor = AccentColor,
+                SuccessColor = SuccessColor,
+                WarningColor = WarningColor
+            };
+        }
+
+        public static ThemeSettingsModel Default()
+        {
+            return new ThemeSettingsModel();
+        }
+
+        public static ThemeSettingsModel Normalize(ThemeSettingsModel value)
+        {
+            return new ThemeSettingsModel
+            {
+                DefaultTheme = NormalizeTheme(value.DefaultTheme),
+                AccentColor = NormalizeColor(value.AccentColor, DefaultAccentColor),
+                SuccessColor = NormalizeColor(value.SuccessColor, DefaultSuccessColor),
+                WarningColor = NormalizeColor(value.WarningColor, DefaultWarningColor)
+            };
+        }
+
+        private static string NormalizeTheme(string? value)
+        {
+            return string.Equals(value, DarkTheme, StringComparison.OrdinalIgnoreCase)
+                ? DarkTheme
+                : LightTheme;
+        }
+
+        private static string NormalizeColor(string? value, string fallback)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return fallback;
+            }
+
+            var trimmedValue = value.Trim();
+            if (trimmedValue.Length != 7 || trimmedValue[0] != '#')
+            {
+                return fallback;
+            }
+
+            for (var index = 1; index < trimmedValue.Length; index++)
+            {
+                if (!Uri.IsHexDigit(trimmedValue[index]))
+                {
+                    return fallback;
+                }
+            }
+
+            return trimmedValue;
+        }
     }
 }

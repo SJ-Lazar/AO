@@ -33,36 +33,47 @@ public static class DashboardSlice
     {
         var utcNow = DateTime.UtcNow;
         var today = utcNow.Date;
-        var deals = await dbContext.Deals.AsNoTracking().ToListAsync(cancellationToken);
-        var tasks = await dbContext.Tasks.AsNoTracking().ToListAsync(cancellationToken);
-        var totalCompaniesTask = dbContext.Companies.CountAsync(cancellationToken);
-        var totalContactsTask = dbContext.Contacts.CountAsync(cancellationToken);
-        var recentActivityCountTask = dbContext.Activities.CountAsync(activity => activity.CreatedUtc >= utcNow.AddDays(-7), cancellationToken);
-
-        await Task.WhenAll(totalCompaniesTask, totalContactsTask, recentActivityCountTask);
+        var dealsQuery = dbContext.Deals.AsNoTracking();
+        var tasksQuery = dbContext.Tasks.AsNoTracking();
+        var totalCompanies = await dbContext.Companies.CountAsync(cancellationToken);
+        var totalContacts = await dbContext.Contacts.CountAsync(cancellationToken);
+        var openDealCount = await dealsQuery.CountAsync(deal => !deal.IsClosed, cancellationToken);
+        var closedDealCount = await dealsQuery.CountAsync(deal => deal.IsClosed, cancellationToken);
+        var openPipelineValue = await dealsQuery.Where(deal => !deal.IsClosed).Select(deal => (decimal?)deal.Value).SumAsync(cancellationToken) ?? 0m;
+        var totalTaskCount = await tasksQuery.CountAsync(cancellationToken);
+        var openTaskCount = await tasksQuery.CountAsync(task => !task.IsCompleted, cancellationToken);
+        var overdueTaskCount = await tasksQuery.CountAsync(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < today, cancellationToken);
+        var tasksDueTodayCount = await tasksQuery.CountAsync(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date == today, cancellationToken);
+        var recentActivityCount = await dbContext.Activities.CountAsync(activity => activity.CreatedUtc >= utcNow.AddDays(-7), cancellationToken);
 
         var pipelineStages = Enum.GetValues<DealStage>()
-            .Select(stage => new PipelineStageSummaryDto
+            .Select(async stage => new PipelineStageSummaryDto
             {
                 Stage = stage.ToString(),
-                Count = deals.Count(deal => deal.Stage == stage),
-                Value = deals.Where(deal => deal.Stage == stage).Sum(deal => deal.Value)
+                Count = await dealsQuery.CountAsync(deal => deal.Stage == stage, cancellationToken),
+                Value = await dealsQuery.Where(deal => deal.Stage == stage).Select(deal => (decimal?)deal.Value).SumAsync(cancellationToken) ?? 0m
             })
             .ToList();
 
+        var resolvedPipelineStages = new List<PipelineStageSummaryDto>(pipelineStages.Count);
+        foreach (var pipelineStageTask in pipelineStages)
+        {
+            resolvedPipelineStages.Add(await pipelineStageTask);
+        }
+
         return new DashboardSummaryDto
         {
-            TotalCompanies = totalCompaniesTask.Result,
-            TotalContacts = totalContactsTask.Result,
-            OpenDealCount = deals.Count(deal => !deal.IsClosed),
-            ClosedDealCount = deals.Count(deal => deal.IsClosed),
-            OpenPipelineValue = deals.Where(deal => !deal.IsClosed).Sum(deal => deal.Value),
-            TotalTaskCount = tasks.Count,
-            OpenTaskCount = tasks.Count(task => !task.IsCompleted),
-            OverdueTaskCount = tasks.Count(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < today),
-            TasksDueTodayCount = tasks.Count(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date == today),
-            RecentActivityCount = recentActivityCountTask.Result,
-            PipelineStages = pipelineStages
+            TotalCompanies = totalCompanies,
+            TotalContacts = totalContacts,
+            OpenDealCount = openDealCount,
+            ClosedDealCount = closedDealCount,
+            OpenPipelineValue = openPipelineValue,
+            TotalTaskCount = totalTaskCount,
+            OpenTaskCount = openTaskCount,
+            OverdueTaskCount = overdueTaskCount,
+            TasksDueTodayCount = tasksDueTodayCount,
+            RecentActivityCount = recentActivityCount,
+            PipelineStages = resolvedPipelineStages
         };
     }
 }

@@ -1,10 +1,11 @@
 @page "/reports"
 @using AO.Core.Features.Activities
 @using AO.Core.Features.Companies
-@using AO.Core.Features.Dashboard
 @using AO.Core.Features.Deals
+@using AO.Core.Features.Reports
 @using AO.UI.Shared.Services
 @inject CrmApiClient CrmApiClient
+@inject IJSRuntime JS
 
 <PageTitle>Reports</PageTitle>
 
@@ -23,30 +24,75 @@
         <div class="crm-hero-copy">
             <span class="crm-eyebrow">Insights</span>
             <h1>Reports</h1>
-            <p>Route-based reporting with dashboard aggregates, pipeline breakdowns, company summaries, and recent activity.</p>
+            <p>Filter, export, and drill into CRM trends across pipeline, tasks, companies, and activity.</p>
+        </div>
+    </section>
+
+    <section class="crm-card crm-panel">
+        <div class="crm-panel-header">
+            <div>
+                <h2>Filters</h2>
+                <p>Apply created-date, company, and stage filters across the reporting workspace.</p>
+            </div>
+            <div class="crm-inline-actions">
+                <button type="button" class="crm-button crm-button-secondary" @onclick="ClearFiltersAsync" disabled="@(isLoading || isExporting)">Clear</button>
+                <button type="button" class="crm-button crm-button-primary" @onclick="LoadAsync" disabled="@(isLoading || isExporting)">Apply</button>
+                <button type="button" class="crm-chip-button" @onclick="ExportAsync" disabled="@(isLoading || isExporting)">@(isExporting ? "Exporting..." : "Export CSV")</button>
+            </div>
+        </div>
+
+        <div class="crm-report-filter-grid">
+            <label class="crm-field">
+                <span>Created from</span>
+                <InputDate class="crm-input" @bind-Value="filters.FromUtc" />
+            </label>
+            <label class="crm-field">
+                <span>Created to</span>
+                <InputDate class="crm-input" @bind-Value="filters.ToUtc" />
+            </label>
+            <label class="crm-field">
+                <span>Company</span>
+                <InputSelect class="crm-input" @bind-Value="filters.CompanyId">
+                    <option value="">All companies</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
+            </label>
+            <label class="crm-field">
+                <span>Stage</span>
+                <InputSelect class="crm-input" @bind-Value="filters.Stage">
+                    <option value="">All stages</option>
+                    @foreach (var stage in Enum.GetValues<DealStage>())
+                    {
+                        <option value="@stage">@stage</option>
+                    }
+                </InputSelect>
+            </label>
         </div>
     </section>
 
     <section class="crm-stat-grid">
         <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Pipeline</span>
-            <strong>@FormatCurrency(summary.OpenPipelineValue)</strong>
-            <span class="crm-badge crm-badge-accent">@summary.OpenDealCount open</span>
+            <span class="crm-stat-label">Open pipeline</span>
+            <strong>@FormatCurrency(report.Summary.OpenPipelineValue)</strong>
+            <span class="crm-badge crm-badge-accent">@report.Summary.OpenDealCount open</span>
         </article>
         <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Closed deals</span>
-            <strong>@summary.ClosedDealCount</strong>
-            <span class="crm-badge">Won and lost</span>
+            <span class="crm-stat-label">Win rate</span>
+            <strong>@FormatPercent(report.Summary.WinRate)</strong>
+            <span class="crm-badge">@report.Summary.WonDealCount won / @report.Summary.ClosedDealCount closed</span>
         </article>
         <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Due today</span>
-            <strong>@summary.TasksDueTodayCount</strong>
-            <span class="crm-badge crm-badge-warning">@summary.OverdueTaskCount overdue</span>
+            <span class="crm-stat-label">Average deal</span>
+            <strong>@FormatCurrency(report.Summary.AverageDealValue)</strong>
+            <span class="crm-badge crm-badge-success">@FormatCurrency(report.Summary.ClosedRevenueValue) closed revenue</span>
         </article>
         <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Recent activity</span>
-            <strong>@summary.RecentActivityCount</strong>
-            <span class="crm-badge crm-badge-success">Last 7 days</span>
+            <span class="crm-stat-label">Tasks</span>
+            <strong>@report.Summary.OpenTaskCount</strong>
+            <span class="crm-badge crm-badge-warning">@report.Summary.OverdueTaskCount overdue</span>
         </article>
     </section>
 
@@ -55,22 +101,167 @@
             <div class="crm-panel-header">
                 <div>
                     <h2>Pipeline by stage</h2>
-                    <p>Breakdown of all stages instead of a single pipeline landing.</p>
+                    <p>Select a stage card to drill into matching deals.</p>
                 </div>
+                <span class="crm-badge">@report.Summary.ClosedDealCount closed</span>
             </div>
+
             <div class="crm-stage-grid">
-                @if (summary.PipelineStages.Count == 0)
+                @if (report.PipelineStages.Count == 0)
                 {
                     <div class="crm-empty-state">No pipeline data is available yet.</div>
                 }
                 else
                 {
-                    @foreach (var stage in summary.PipelineStages)
+                    @foreach (var stage in report.PipelineStages)
                     {
-                        <div class="crm-stage-card @(stage.Stage == nameof(DealStage.Negotiation) ? "crm-stage-card-accent" : string.Empty)">
+                        <button type="button" class="crm-stage-button @(IsStageSelected(stage.Stage) ? "crm-stage-button-active" : string.Empty) @(stage.Stage == nameof(DealStage.Negotiation) ? "crm-stage-card-accent" : string.Empty)" @onclick="() => ApplyStageFilterAsync(stage.Stage)">
                             <span>@stage.Stage</span>
                             <strong>@stage.Count</strong>
                             <small>@FormatCurrency(stage.Value)</small>
+                        </button>
+                    }
+                }
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Trend charts</h2>
+                    <p>Monthly deal value and task throughput for the current filtered scope.</p>
+                </div>
+            </div>
+
+            <div class="crm-report-chart-grid">
+                <section class="crm-chart-card">
+                    <span>Deal value trend</span>
+                    <strong>@FormatCurrency(report.DealTrends.Sum(point => point.Value))</strong>
+                    <div class="crm-chart-bars">
+                        @foreach (var point in report.DealTrends)
+                        {
+                            <span title="@($"{point.Label}: {FormatCurrency(point.Value)}")" style="height: @GetDealTrendHeight(point.Value);"></span>
+                        }
+                    </div>
+                    <div class="crm-report-chart-labels">
+                        @foreach (var point in report.DealTrends)
+                        {
+                            <small>@point.Label</small>
+                        }
+                    </div>
+                </section>
+
+                <section class="crm-chart-card">
+                    <span>Task throughput</span>
+                    <strong>@report.TaskTrends.Sum(point => point.CreatedCount)</strong>
+                    <div class="crm-chart-bars">
+                        @foreach (var point in report.TaskTrends)
+                        {
+                            <span title="@($"{point.Label}: {point.CreatedCount} created")" style="height: @GetTaskTrendHeight(point.CreatedCount);"></span>
+                        }
+                    </div>
+                    <div class="crm-report-chart-labels">
+                        @foreach (var point in report.TaskTrends)
+                        {
+                            <small>@point.Label</small>
+                        }
+                    </div>
+                    <div class="crm-report-chart-meta">
+                        @foreach (var point in report.TaskTrends)
+                        {
+                            <span>@point.Label: @point.CompletedCount done</span>
+                        }
+                    </div>
+                </section>
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Top companies</h2>
+                    <p>Select a company to narrow the report drill-down.</p>
+                </div>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (report.TopCompanies.Count == 0)
+                {
+                    <div class="crm-empty-state">No companies available for this filter.</div>
+                }
+                else
+                {
+                    @foreach (var company in report.TopCompanies)
+                    {
+                        <button type="button" class="crm-list-button @(IsCompanySelected(company.Id) ? "crm-list-button-active" : string.Empty)" @onclick="() => ApplyCompanyFilterAsync(company.Id)">
+                            <div class="crm-list-item">
+                                <div>
+                                    <strong>@company.Name</strong>
+                                    <small>@GetCompanySubtitle(company)</small>
+                                </div>
+                                <span class="crm-badge @(company.OpenDealCount > 0 ? "crm-badge-accent" : string.Empty)">@company.OpenDealCount open</span>
+                            </div>
+                        </button>
+                    }
+                }
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Activity mix</h2>
+                    <p>Breakdown by activity type inside the current report scope.</p>
+                </div>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (report.ActivityBreakdown.Count == 0)
+                {
+                    <div class="crm-empty-state">No activity data is available yet.</div>
+                }
+                else
+                {
+                    @foreach (var item in report.ActivityBreakdown)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@item.Type</strong>
+                                <small>Recent event count</small>
+                            </div>
+                            <span class="crm-badge @(GetActivityBadgeClass(item.Type))">@item.Count</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+
+    <section class="crm-surface-grid">
+        <article class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Deals drill-down</h2>
+                    <p>Latest deals matching the selected filters.</p>
+                </div>
+                <span class="crm-badge">@report.Deals.Count items</span>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (report.Deals.Count == 0)
+                {
+                    <div class="crm-empty-state">No deals match the current filters.</div>
+                }
+                else
+                {
+                    @foreach (var deal in report.Deals)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@deal.Title</strong>
+                                <small>@GetDealSubtitle(deal)</small>
+                            </div>
+                            <span class="crm-badge @(GetDealStageBadgeClass(deal.Stage))">@deal.Stage</span>
                         </div>
                     }
                 }
@@ -80,26 +271,27 @@
         <article class="crm-card crm-panel">
             <div class="crm-panel-header">
                 <div>
-                    <h2>Top companies</h2>
-                    <p>Accounts with the most open opportunities.</p>
+                    <h2>Tasks drill-down</h2>
+                    <p>Open and completed tasks inside the filtered report scope.</p>
                 </div>
+                <span class="crm-badge crm-badge-warning">@report.Summary.TasksDueTodayCount due today</span>
             </div>
 
             <div class="crm-stack-list">
-                @if (companies.Count == 0)
+                @if (report.Tasks.Count == 0)
                 {
-                    <div class="crm-empty-state">No companies available for reporting.</div>
+                    <div class="crm-empty-state">No tasks match the current filters.</div>
                 }
                 else
                 {
-                    @foreach (var company in companies.OrderByDescending(company => company.OpenDealCount).ThenBy(company => company.Name).Take(6))
+                    @foreach (var task in report.Tasks)
                     {
                         <div class="crm-list-item">
                             <div>
-                                <strong>@company.Name</strong>
-                                <small>@GetCompanySubtitle(company)</small>
+                                <strong>@task.Title</strong>
+                                <small>@GetTaskSubtitle(task)</small>
                             </div>
-                            <span class="crm-badge @(company.OpenDealCount > 0 ? "crm-badge-accent" : string.Empty)">@company.OpenDealCount open</span>
+                            <span class="crm-badge @(task.IsCompleted ? "crm-badge-success" : task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date ? "crm-badge-warning" : string.Empty)">@(task.IsCompleted ? "Done" : task.Priority)</span>
                         </div>
                     }
                 }
@@ -110,18 +302,19 @@
             <div class="crm-panel-header">
                 <div>
                     <h2>Recent activity</h2>
-                    <p>Cross-feature CRM history from the activity slice.</p>
+                    <p>Cross-feature CRM history inside the filtered report scope.</p>
                 </div>
+                <span class="crm-badge crm-badge-success">@report.Summary.RecentActivityCount last 7 days</span>
             </div>
 
             <div class="crm-stack-list">
-                @if (activities.Count == 0)
+                @if (report.Activities.Count == 0)
                 {
                     <div class="crm-empty-state">No recent activity is available yet.</div>
                 }
                 else
                 {
-                    @foreach (var activity in activities)
+                    @foreach (var activity in report.Activities)
                     {
                         <div class="crm-list-item">
                             <div>
@@ -138,10 +331,11 @@
 </div>
 
 @code {
-    private DashboardSummaryDto summary = new();
     private readonly List<CompanyDto> companies = [];
-    private readonly List<CrmActivityDto> activities = [];
+    private ReportSnapshotDto report = new();
+    private ReportFilterFormModel filters = new();
     private bool isLoading;
+    private bool isExporting;
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -156,23 +350,20 @@
 
         try
         {
-            var summaryTask = CrmApiClient.GetDashboardAsync();
+            var request = BuildRequest();
             var companiesTask = CrmApiClient.GetCompaniesAsync();
-            var activitiesTask = CrmApiClient.GetActivitiesAsync(20);
-            await Task.WhenAll(summaryTask, companiesTask, activitiesTask);
+            var reportsTask = CrmApiClient.GetReportsAsync(request);
+            await Task.WhenAll(companiesTask, reportsTask);
 
-            summary = await summaryTask;
             companies.Clear();
             companies.AddRange(await companiesTask);
-            activities.Clear();
-            activities.AddRange(await activitiesTask);
+            report = await reportsTask;
         }
         catch (Exception exception)
         {
             errorMessage = exception.Message;
-            summary = new DashboardSummaryDto();
+            report = new ReportSnapshotDto();
             companies.Clear();
-            activities.Clear();
         }
         finally
         {
@@ -180,17 +371,130 @@
         }
     }
 
-    private static string FormatCurrency(decimal value) => value.ToString("C0");
-
-    private static string GetCompanySubtitle(CompanyDto company)
+    private async Task ClearFiltersAsync()
     {
-        var segments = new[] { company.Industry, $"{company.ContactCount} contacts", $"{company.OpenDealCount} open deals" }
-            .Where(value => !string.IsNullOrWhiteSpace(value));
-
-        return string.Join(" • ", segments);
+        filters = new ReportFilterFormModel();
+        await LoadAsync();
     }
 
-    private static string GetActivitySubtitle(CrmActivityDto activity)
+    private async Task ExportAsync()
+    {
+        isExporting = true;
+        errorMessage = null;
+
+        try
+        {
+            var export = await CrmApiClient.GetReportsExportAsync(BuildRequest());
+            await JS.InvokeVoidAsync("crmThemeSettings.downloadFile", export.FileName, export.ContentType, export.ContentBase64);
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private async Task ApplyStageFilterAsync(string stage)
+    {
+        filters.Stage = string.Equals(filters.Stage, stage, StringComparison.OrdinalIgnoreCase) ? string.Empty : stage;
+        await LoadAsync();
+    }
+
+    private async Task ApplyCompanyFilterAsync(Guid companyId)
+    {
+        var value = companyId.ToString();
+        filters.CompanyId = string.Equals(filters.CompanyId, value, StringComparison.OrdinalIgnoreCase) ? string.Empty : value;
+        await LoadAsync();
+    }
+
+    private GetReportsRequest BuildRequest()
+    {
+        return new GetReportsRequest
+        {
+            FromUtc = filters.FromUtc?.Date,
+            ToUtc = filters.ToUtc?.Date,
+            CompanyId = Guid.TryParse(filters.CompanyId, out var companyId) ? companyId : null,
+            Stage = Enum.TryParse<DealStage>(filters.Stage, true, out var stage) ? stage : null
+        };
+    }
+
+    private bool IsStageSelected(string stage)
+    {
+        return string.Equals(filters.Stage, stage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsCompanySelected(Guid companyId)
+    {
+        return Guid.TryParse(filters.CompanyId, out var selectedCompanyId) && selectedCompanyId == companyId;
+    }
+
+    private string GetDealTrendHeight(decimal value)
+    {
+        var maxValue = report.DealTrends.Count == 0 ? 0m : report.DealTrends.Max(point => point.Value);
+        if (maxValue <= 0m)
+        {
+            return "18%";
+        }
+
+        var percentage = Math.Max(18m, Math.Round(value / maxValue * 100m, 2));
+        return $"{percentage.ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
+
+    private string GetTaskTrendHeight(int value)
+    {
+        var maxValue = report.TaskTrends.Count == 0 ? 0 : report.TaskTrends.Max(point => point.CreatedCount);
+        if (maxValue <= 0)
+        {
+            return "18%";
+        }
+
+        var percentage = Math.Max(18d, Math.Round((double)value / maxValue * 100d, 2));
+        return $"{percentage.ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
+
+    private static string FormatCurrency(decimal value) => value.ToString("C0");
+
+    private static string FormatPercent(decimal value) => $"{value:0.#}%";
+
+    private static string GetCompanySubtitle(ReportCompanySummaryDto company)
+    {
+        var segments = new[] { company.Industry, $"{company.ContactCount} contacts", $"{FormatCurrency(company.OpenPipelineValue)} pipeline" }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetDealSubtitle(ReportDealSummaryDto deal)
+    {
+        var segments = new[] { deal.CompanyName, deal.ContactName, FormatCurrency(deal.Value) }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetTaskSubtitle(ReportTaskSummaryDto task)
+    {
+        var segments = new[] { task.CompanyName, task.ContactName, task.DealTitle }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetDealStageBadgeClass(string stage)
+    {
+        return stage switch
+        {
+            nameof(DealStage.Won) => "crm-badge-success",
+            nameof(DealStage.Negotiation) => "crm-badge-accent",
+            nameof(DealStage.Lost) => "crm-badge-warning",
+            _ => string.Empty
+        };
+    }
+
+    private static string GetActivitySubtitle(ReportActivitySummaryDto activity)
     {
         var segments = new[] { activity.Type, activity.CompanyName, activity.ContactName, activity.DealTitle, activity.TaskTitle, activity.Description }
             .Where(value => !string.IsNullOrWhiteSpace(value));
@@ -205,4 +509,12 @@
         nameof(CrmActivityType.TaskUpdated) => "crm-badge-warning",
         _ => string.Empty
     };
+
+    private sealed class ReportFilterFormModel
+    {
+        public DateTime? FromUtc { get; set; }
+        public DateTime? ToUtc { get; set; }
+        public string CompanyId { get; set; } = string.Empty;
+        public string Stage { get; set; } = string.Empty;
+    }
 }

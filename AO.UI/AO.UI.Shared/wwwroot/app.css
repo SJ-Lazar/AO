@@ -426,6 +426,117 @@ app,
     font-size: 0.76rem;
 }
 
+.crm-theme-settings-grid {
+    display: grid;
+    gap: var(--crm-gap-md);
+}
+
+.crm-color-field {
+    align-content: start;
+}
+
+.crm-color-input-shell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--crm-gap-sm);
+    align-items: center;
+}
+
+.crm-color-picker {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0.2rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--crm-radius-md);
+    background: var(--color-surface-strong);
+}
+
+.crm-color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.crm-color-picker::-webkit-color-swatch,
+.crm-color-picker::-moz-color-swatch {
+    border: 0;
+    border-radius: calc(var(--crm-radius-md) - 0.2rem);
+}
+
+.crm-report-filter-grid,
+.crm-report-chart-grid,
+.crm-report-chart-labels,
+.crm-report-chart-meta {
+    display: grid;
+    gap: var(--crm-gap-md);
+}
+
+.crm-report-filter-grid,
+.crm-report-chart-grid {
+    grid-template-columns: 1fr;
+}
+
+.crm-report-chart-labels {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--crm-gap-xs);
+}
+
+.crm-report-chart-labels small,
+.crm-report-chart-meta span {
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+}
+
+.crm-report-chart-meta {
+    gap: var(--crm-gap-xs);
+}
+
+.crm-stage-button,
+.crm-list-button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+}
+
+.crm-stage-button {
+    display: grid;
+    gap: 0.25rem;
+    cursor: pointer;
+    padding: 0.75rem;
+    border-radius: var(--crm-radius-lg);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-strong);
+}
+
+.crm-stage-button-active,
+.crm-list-button-active .crm-list-item {
+    border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+}
+
+.crm-list-button {
+    cursor: pointer;
+}
+
+.crm-list-button .crm-list-item {
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.crm-list-button:hover .crm-list-item,
+.crm-stage-button:hover {
+    transform: translateY(-1px);
+}
+
+@media (min-width: 768px) {
+    .crm-report-filter-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .crm-report-chart-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .crm-field-note {
     font-size: 0.74rem;
     color: var(--color-text-muted);
