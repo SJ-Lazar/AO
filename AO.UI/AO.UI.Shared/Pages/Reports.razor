@@ -1,0 +1,208 @@
+@page "/reports"
+@using AO.Core.Features.Activities
+@using AO.Core.Features.Companies
+@using AO.Core.Features.Dashboard
+@using AO.Core.Features.Deals
+@using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
+
+<PageTitle>Reports</PageTitle>
+
+<div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading reports...</div>
+    }
+
+    <section class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Insights</span>
+            <h1>Reports</h1>
+            <p>Route-based reporting with dashboard aggregates, pipeline breakdowns, company summaries, and recent activity.</p>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Pipeline</span>
+            <strong>@FormatCurrency(summary.OpenPipelineValue)</strong>
+            <span class="crm-badge crm-badge-accent">@summary.OpenDealCount open</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Closed deals</span>
+            <strong>@summary.ClosedDealCount</strong>
+            <span class="crm-badge">Won and lost</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Due today</span>
+            <strong>@summary.TasksDueTodayCount</strong>
+            <span class="crm-badge crm-badge-warning">@summary.OverdueTaskCount overdue</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Recent activity</span>
+            <strong>@summary.RecentActivityCount</strong>
+            <span class="crm-badge crm-badge-success">Last 7 days</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Pipeline by stage</h2>
+                    <p>Breakdown of all stages instead of a single pipeline landing.</p>
+                </div>
+            </div>
+            <div class="crm-stage-grid">
+                @if (summary.PipelineStages.Count == 0)
+                {
+                    <div class="crm-empty-state">No pipeline data is available yet.</div>
+                }
+                else
+                {
+                    @foreach (var stage in summary.PipelineStages)
+                    {
+                        <div class="crm-stage-card @(stage.Stage == nameof(DealStage.Negotiation) ? "crm-stage-card-accent" : string.Empty)">
+                            <span>@stage.Stage</span>
+                            <strong>@stage.Count</strong>
+                            <small>@FormatCurrency(stage.Value)</small>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Top companies</h2>
+                    <p>Accounts with the most open opportunities.</p>
+                </div>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (companies.Count == 0)
+                {
+                    <div class="crm-empty-state">No companies available for reporting.</div>
+                }
+                else
+                {
+                    @foreach (var company in companies.OrderByDescending(company => company.OpenDealCount).ThenBy(company => company.Name).Take(6))
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@company.Name</strong>
+                                <small>@GetCompanySubtitle(company)</small>
+                            </div>
+                            <span class="crm-badge @(company.OpenDealCount > 0 ? "crm-badge-accent" : string.Empty)">@company.OpenDealCount open</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Recent activity</h2>
+                    <p>Cross-feature CRM history from the activity slice.</p>
+                </div>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (activities.Count == 0)
+                {
+                    <div class="crm-empty-state">No recent activity is available yet.</div>
+                }
+                else
+                {
+                    @foreach (var activity in activities)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@activity.Title</strong>
+                                <small>@GetActivitySubtitle(activity)</small>
+                            </div>
+                            <span class="crm-badge @(GetActivityBadgeClass(activity.Type))">@activity.CreatedUtc.ToLocalTime().ToString("dd MMM")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+</div>
+
+@code {
+    private DashboardSummaryDto summary = new();
+    private readonly List<CompanyDto> companies = [];
+    private readonly List<CrmActivityDto> activities = [];
+    private bool isLoading;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var summaryTask = CrmApiClient.GetDashboardAsync();
+            var companiesTask = CrmApiClient.GetCompaniesAsync();
+            var activitiesTask = CrmApiClient.GetActivitiesAsync(20);
+            await Task.WhenAll(summaryTask, companiesTask, activitiesTask);
+
+            summary = await summaryTask;
+            companies.Clear();
+            companies.AddRange(await companiesTask);
+            activities.Clear();
+            activities.AddRange(await activitiesTask);
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            summary = new DashboardSummaryDto();
+            companies.Clear();
+            activities.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string FormatCurrency(decimal value) => value.ToString("C0");
+
+    private static string GetCompanySubtitle(CompanyDto company)
+    {
+        var segments = new[] { company.Industry, $"{company.ContactCount} contacts", $"{company.OpenDealCount} open deals" }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments);
+    }
+
+    private static string GetActivitySubtitle(CrmActivityDto activity)
+    {
+        var segments = new[] { activity.Type, activity.CompanyName, activity.ContactName, activity.DealTitle, activity.TaskTitle, activity.Description }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("Recent CRM activity"));
+    }
+
+    private static string GetActivityBadgeClass(string activityType) => activityType switch
+    {
+        nameof(CrmActivityType.DealStageChanged) => "crm-badge-accent",
+        nameof(CrmActivityType.TaskCompleted) => "crm-badge-success",
+        nameof(CrmActivityType.TaskUpdated) => "crm-badge-warning",
+        _ => string.Empty
+    };
+}

@@ -1,8 +1,11 @@
 using AO.UI.Shared.Services;
 using AO.UI.Web.Components;
 using AO.UI.Web.Services;
+using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var crmApiOptions = new CrmApiOptions();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -10,6 +13,15 @@ builder.Services.AddRazorComponents()
 
 // Add device-specific services used by the AO.UI.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
+builder.Services.AddSingleton(crmApiOptions);
+builder.Services.AddScoped(sp =>
+{
+    var client = new HttpClient();
+    client.BaseAddress = new Uri(crmApiOptions.BaseAddress, UriKind.Absolute);
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    client.DefaultRequestHeaders.Add("X-API-Key", crmApiOptions.ApiKey);
+    return new CrmApiClient(client);
+});
 
 var app = builder.Build();
 

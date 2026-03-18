@@ -1,0 +1,358 @@
+@page "/contacts"
+@using AO.Core.Features.Companies
+@using AO.Core.Features.Contacts
+@using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
+
+<PageTitle>Contacts</PageTitle>
+
+<div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading contacts...</div>
+    }
+
+    <section class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Relationships</span>
+            <h1>Contacts</h1>
+            <p>View contacts and companies on a dedicated page instead of a dashboard section.</p>
+        </div>
+        <div class="crm-hero-actions">
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateCompanyModal">New company</button>
+            <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateContactModal">New contact</button>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Contacts</span>
+            <strong>@contacts.Count</strong>
+            <span class="crm-badge">@contacts.Count(contact => !contact.IsArchived) active</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Companies</span>
+            <strong>@companies.Count</strong>
+            <span class="crm-badge crm-badge-accent">@companies.Count(company => !company.IsArchived) active</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Archived contacts</span>
+            <strong>@contacts.Count(contact => contact.IsArchived)</strong>
+            <span class="crm-badge">Review old accounts</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Companies with deals</span>
+            <strong>@companies.Count(company => company.OpenDealCount > 0)</strong>
+            <span class="crm-badge crm-badge-success">In pipeline</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>All contacts</h2>
+                    <p>Each menu now opens its own screen and data set.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateContactModal">Create</button>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (contacts.Count == 0)
+                {
+                    <div class="crm-empty-state">No contacts found. Create a contact to start building relationships.</div>
+                }
+                else
+                {
+                    @foreach (var contact in contacts)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@contact.FullName</strong>
+                                <small>@GetContactSubtitle(contact)</small>
+                            </div>
+                            <span class="crm-badge @(contact.IsArchived ? string.Empty : "crm-badge-accent")">@(contact.IsArchived ? "Archived" : "Active")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+
+        <article class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Companies</h2>
+                    <p>Linked account summaries.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateCompanyModal">Create</button>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (companies.Count == 0)
+                {
+                    <div class="crm-empty-state">No companies found. Create a company to group contacts and deals.</div>
+                }
+                else
+                {
+                    @foreach (var company in companies)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@company.Name</strong>
+                                <small>@GetCompanySubtitle(company)</small>
+                            </div>
+                            <span class="crm-badge @(company.IsArchived ? string.Empty : "crm-badge-success")">@(company.IsArchived ? "Archived" : "Active")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+</div>
+
+<CrmModal IsOpen="isCreateCompanyModalOpen" Title="Create company" Subtitle="Compact account form" Size="Medium" OnClose="CloseCreateCompanyModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Name</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Name" />
+            </label>
+            <label>
+                <span>Industry</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Industry" />
+            </label>
+            <label>
+                <span>Website</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Website" />
+            </label>
+            <label>
+                <span>Phone</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Phone" />
+            </label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(companyModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@companyModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateCompanyModal" disabled="@isSavingCompany">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveCompanyAsync" disabled="@isSavingCompany">@(isSavingCompany ? "Saving..." : "Save company")</button>
+    </FooterContent>
+</CrmModal>
+
+<CrmModal IsOpen="isCreateContactModalOpen" Title="Create contact" Subtitle="Compact contact form" Size="Medium" OnClose="CloseCreateContactModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>First name</span>
+                <InputText class="crm-input" @bind-Value="contactForm.FirstName" />
+            </label>
+            <label>
+                <span>Last name</span>
+                <InputText class="crm-input" @bind-Value="contactForm.LastName" />
+            </label>
+            <label>
+                <span>Email</span>
+                <InputText class="crm-input" @bind-Value="contactForm.Email" />
+            </label>
+            <label>
+                <span>Phone</span>
+                <InputText class="crm-input" @bind-Value="contactForm.Phone" />
+            </label>
+            <label>
+                <span>Job title</span>
+                <InputText class="crm-input" @bind-Value="contactForm.JobTitle" />
+            </label>
+            <label>
+                <span>Company</span>
+                <InputSelect class="crm-input" @bind-Value="contactForm.CompanyId">
+                    <option value="">No company</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(contactModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@contactModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateContactModal" disabled="@isSavingContact">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveContactAsync" disabled="@isSavingContact">@(isSavingContact ? "Saving..." : "Save contact")</button>
+    </FooterContent>
+</CrmModal>
+
+@code {
+    private readonly List<CompanyDto> companies = [];
+    private readonly List<ContactDto> contacts = [];
+    private bool isLoading;
+    private bool isCreateCompanyModalOpen;
+    private bool isCreateContactModalOpen;
+    private bool isSavingCompany;
+    private bool isSavingContact;
+    private string? errorMessage;
+    private string? companyModalErrorMessage;
+    private string? contactModalErrorMessage;
+    private CompanyFormModel companyForm = new();
+    private ContactFormModel contactForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var companiesTask = CrmApiClient.GetCompaniesAsync();
+            var contactsTask = CrmApiClient.GetContactsAsync();
+            await Task.WhenAll(companiesTask, contactsTask);
+
+            companies.Clear();
+            companies.AddRange(await companiesTask);
+            contacts.Clear();
+            contacts.AddRange((await contactsTask).OrderBy(contact => contact.FirstName).ThenBy(contact => contact.LastName));
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            companies.Clear();
+            contacts.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateCompanyModal()
+    {
+        companyForm = new CompanyFormModel();
+        companyModalErrorMessage = null;
+        isCreateCompanyModalOpen = true;
+    }
+
+    private void CloseCreateCompanyModal()
+    {
+        companyModalErrorMessage = null;
+        isCreateCompanyModalOpen = false;
+    }
+
+    private void OpenCreateContactModal()
+    {
+        contactForm = new ContactFormModel();
+        contactModalErrorMessage = null;
+        isCreateContactModalOpen = true;
+    }
+
+    private void CloseCreateContactModal()
+    {
+        contactModalErrorMessage = null;
+        isCreateContactModalOpen = false;
+    }
+
+    private async Task SaveCompanyAsync()
+    {
+        isSavingCompany = true;
+        companyModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateCompanyAsync(new CreateCompanyRequest
+            {
+                Name = companyForm.Name,
+                Industry = companyForm.Industry,
+                Website = companyForm.Website,
+                Phone = companyForm.Phone
+            });
+
+            CloseCreateCompanyModal();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            companyModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingCompany = false;
+        }
+    }
+
+    private async Task SaveContactAsync()
+    {
+        isSavingContact = true;
+        contactModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateContactAsync(new CreateContactRequest
+            {
+                FirstName = contactForm.FirstName,
+                LastName = contactForm.LastName,
+                Email = contactForm.Email,
+                Phone = contactForm.Phone,
+                JobTitle = contactForm.JobTitle,
+                CompanyId = contactForm.CompanyId
+            });
+
+            CloseCreateContactModal();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            contactModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingContact = false;
+        }
+    }
+
+    private static string GetContactSubtitle(ContactDto contact)
+    {
+        var segments = new[] { contact.CompanyName, contact.Email, contact.Phone }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetCompanySubtitle(CompanyDto company)
+    {
+        var segments = new[] { company.Industry, $"{company.ContactCount} contacts", $"{company.OpenDealCount} open deals" }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments);
+    }
+
+    private sealed class CompanyFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Industry { get; set; }
+        public string? Website { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    private sealed class ContactFormModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? JobTitle { get; set; }
+        public Guid? CompanyId { get; set; }
+    }
+}

@@ -1,0 +1,337 @@
+@page "/tasks"
+@using AO.Core.Features.Tasks
+@using AO.Core.Features.Contacts
+@using AO.Core.Features.Deals
+@using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
+
+<PageTitle>Tasks</PageTitle>
+
+<div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading tasks...</div>
+    }
+
+    <section class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Execution</span>
+            <h1>Tasks</h1>
+            <p>Track follow-ups, due work, and completion across contacts and deals.</p>
+        </div>
+        <div class="crm-hero-actions">
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateTaskModal">New task</button>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Open tasks</span>
+            <strong>@tasks.Count(task => !task.IsCompleted)</strong>
+            <span class="crm-badge">@tasks.Count total</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Overdue</span>
+            <strong>@tasks.Count(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date)</strong>
+            <span class="crm-badge crm-badge-warning">Needs attention</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Due today</span>
+            <strong>@tasks.Count(task => !task.IsCompleted && task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date == DateTime.UtcNow.Date)</strong>
+            <span class="crm-badge crm-badge-accent">Today</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Completed</span>
+            <strong>@tasks.Count(task => task.IsCompleted)</strong>
+            <span class="crm-badge crm-badge-success">Done</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Task list</h2>
+                    <p>All tasks on a dedicated route instead of the dashboard pipeline page.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateTaskModal">Create</button>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (tasks.Count == 0)
+                {
+                    <div class="crm-empty-state">No tasks found. Create a task to track follow-up work.</div>
+                }
+                else
+                {
+                    @foreach (var task in tasks)
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@task.Title</strong>
+                                <small>@GetTaskSubtitle(task)</small>
+                            </div>
+                            <div class="crm-list-item-actions">
+                                <span class="crm-badge @(task.IsCompleted ? "crm-badge-success" : task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date ? "crm-badge-warning" : string.Empty)">@GetTaskBadge(task)</span>
+                                @if (!task.IsCompleted)
+                                {
+                                    <button type="button" class="crm-chip-button" @onclick="() => CompleteTaskAsync(task.Id)" disabled="@completingTaskIds.Contains(task.Id)">@(completingTaskIds.Contains(task.Id) ? "..." : "Done")</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+</div>
+
+<CrmModal IsOpen="isCreateTaskModalOpen" Title="Create task" Subtitle="Compact follow-up action" Size="Medium" OnClose="CloseCreateTaskModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Title</span>
+                <InputText class="crm-input" @bind-Value="taskForm.Title" />
+            </label>
+            <label>
+                <span>Priority</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.Priority">
+                    @foreach (var priority in Enum.GetValues<CrmTaskPriority>())
+                    {
+                        <option value="@priority">@priority</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Description</span>
+                <InputText class="crm-input" @bind-Value="taskForm.Description" />
+            </label>
+            <label>
+                <span>Due date</span>
+                <InputDate class="crm-input" @bind-Value="taskForm.DueAtUtc" />
+            </label>
+            <label>
+                <span>Contact</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.ContactId">
+                    <option value="">No contact</option>
+                    @foreach (var contact in AvailableTaskContacts)
+                    {
+                        <option value="@contact.Id">@contact.FullName</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Deal</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.DealId" @bind-Value:after="OnTaskDealChanged">
+                    <option value="">No deal</option>
+                    @foreach (var deal in deals)
+                    {
+                        <option value="@deal.Id">@deal.Title</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+        @if (taskForm.DealId.HasValue && AvailableTaskContacts.Count == 0)
+        {
+            <div class="crm-field-note">The selected deal has no compatible contacts available.</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(taskModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@taskModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateTaskModal" disabled="@isSavingTask">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveTaskAsync" disabled="@isSavingTask">@(isSavingTask ? "Saving..." : "Save task")</button>
+    </FooterContent>
+</CrmModal>
+
+@code {
+    private readonly List<ContactDto> contacts = [];
+    private readonly List<DealDto> deals = [];
+    private readonly List<CrmTaskDto> tasks = [];
+    private readonly HashSet<Guid> completingTaskIds = [];
+    private bool isLoading;
+    private bool isCreateTaskModalOpen;
+    private bool isSavingTask;
+    private string? errorMessage;
+    private string? taskModalErrorMessage;
+    private TaskFormModel taskForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var contactsTask = CrmApiClient.GetContactsAsync();
+            var dealsTask = CrmApiClient.GetDealsAsync();
+            var tasksTask = CrmApiClient.GetTasksAsync();
+            await Task.WhenAll(contactsTask, dealsTask, tasksTask);
+
+            contacts.Clear();
+            contacts.AddRange(await contactsTask);
+            deals.Clear();
+            deals.AddRange(await dealsTask);
+            tasks.Clear();
+            tasks.AddRange((await tasksTask).OrderBy(task => task.IsCompleted).ThenBy(task => task.DueAtUtc));
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            contacts.Clear();
+            deals.Clear();
+            tasks.Clear();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateTaskModal()
+    {
+        taskForm = new TaskFormModel();
+        taskModalErrorMessage = null;
+        isCreateTaskModalOpen = true;
+    }
+
+    private void CloseCreateTaskModal()
+    {
+        taskModalErrorMessage = null;
+        isCreateTaskModalOpen = false;
+    }
+
+    private async Task SaveTaskAsync()
+    {
+        isSavingTask = true;
+        taskModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateTaskAsync(new CreateCrmTaskRequest
+            {
+                Title = taskForm.Title,
+                Description = taskForm.Description,
+                DueAtUtc = taskForm.DueAtUtc?.Date,
+                Priority = taskForm.Priority,
+                ContactId = taskForm.ContactId,
+                DealId = taskForm.DealId
+            });
+
+            CloseCreateTaskModal();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            taskModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingTask = false;
+        }
+    }
+
+    private async Task CompleteTaskAsync(Guid taskId)
+    {
+        if (!completingTaskIds.Add(taskId))
+        {
+            return;
+        }
+
+        try
+        {
+            await CrmApiClient.CompleteTaskAsync(taskId);
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            completingTaskIds.Remove(taskId);
+        }
+    }
+
+    private static string GetTaskSubtitle(CrmTaskDto task)
+    {
+        var segments = new[] { task.ContactName, task.DealTitle, task.Description }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetTaskBadge(CrmTaskDto task)
+    {
+        if (task.IsCompleted)
+        {
+            return "Done";
+        }
+
+        if (task.DueAtUtc.HasValue)
+        {
+            return task.DueAtUtc.Value.ToLocalTime().ToString("dd MMM");
+        }
+
+        return task.Priority;
+    }
+
+    private IReadOnlyList<ContactDto> AvailableTaskContacts
+    {
+        get
+        {
+            if (!taskForm.DealId.HasValue)
+            {
+                return contacts;
+            }
+
+            var selectedDeal = deals.FirstOrDefault(deal => deal.Id == taskForm.DealId.Value);
+            if (selectedDeal is null)
+            {
+                return contacts;
+            }
+
+            if (selectedDeal.ContactId.HasValue)
+            {
+                return contacts.Where(contact => contact.Id == selectedDeal.ContactId.Value).ToList();
+            }
+
+            if (selectedDeal.CompanyId.HasValue)
+            {
+                return contacts.Where(contact => contact.CompanyId == selectedDeal.CompanyId.Value).ToList();
+            }
+
+            return contacts;
+        }
+    }
+
+    private void OnTaskDealChanged()
+    {
+        if (taskForm.ContactId.HasValue && AvailableTaskContacts.All(contact => contact.Id != taskForm.ContactId.Value))
+        {
+            taskForm.ContactId = null;
+        }
+    }
+
+    private sealed class TaskFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public DateTime? DueAtUtc { get; set; }
+        public CrmTaskPriority Priority { get; set; } = CrmTaskPriority.Normal;
+        public Guid? ContactId { get; set; }
+        public Guid? DealId { get; set; }
+    }
+}

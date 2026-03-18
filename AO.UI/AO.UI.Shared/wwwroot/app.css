@@ -226,6 +226,23 @@ app,
     overflow: auto;
 }
 
+.crm-table-button {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.crm-table-button:hover {
+    background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+}
+
 .crm-table-row {
     min-width: 32rem;
     display: grid;
@@ -269,6 +286,27 @@ app,
     display: block;
     font-size: 0.74rem;
     margin-top: 0.12rem;
+}
+
+.crm-list-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.crm-alert,
+.crm-empty-state {
+    padding: 0.75rem;
+    border-radius: var(--crm-radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+}
+
+.crm-alert-danger {
+    color: var(--color-danger);
+    border-color: color-mix(in srgb, var(--color-danger) 24%, var(--color-border));
+    background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
 }
 
 .crm-chart-shell {
@@ -380,6 +418,17 @@ app,
     display: grid;
     gap: 0.25rem;
     font-size: 0.76rem;
+}
+
+.crm-field {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.76rem;
+}
+
+.crm-field-note {
+    font-size: 0.74rem;
+    color: var(--color-text-muted);
 }
 
 .crm-modal-backdrop,

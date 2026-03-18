@@ -63,6 +63,11 @@
     border-color: var(--color-border);
 }
 
+.crm-nav-link.active {
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+    border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+}
+
 .crm-nav-icon {
     width: 1.1rem;
     display: inline-flex;

@@ -1,44 +1,58 @@
 ﻿@page "/"
+@using AO.Core.Features.Activities
+@using AO.Core.Features.Companies
+@using AO.Core.Features.Contacts
+@using AO.Core.Features.Dashboard
+@using AO.Core.Features.Deals
+@using AO.Core.Features.Tasks
 @using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
 @inject IFormFactor FormFactor
 
 <PageTitle>Home</PageTitle>
 
 <div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading CRM workspace...</div>
+    }
+
     <section id="overview" class="crm-hero-card crm-card">
         <div class="crm-hero-copy">
-            <span class="crm-eyebrow">Minimal CRM</span>
+          @*   <span class="crm-eyebrow">Minimal CRM</span> *@
             <h1>Compact customer workspace</h1>
-            <p>Desktop-style shell, mobile-first layout, configurable light and dark themes, and compact modal and dialog patterns.</p>
         </div>
 
         <div class="crm-hero-actions">
-            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateContactModal">New contact</button>
-            <button type="button" class="crm-button crm-button-secondary" @onclick="OpenDealDialog">Deal dialog</button>
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateCompanyModal" disabled="@isLoading">New company</button>
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateContactModal" disabled="@isLoading">New contact</button>
+            <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateDealModal" disabled="@isLoading">New deal</button>
+            <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateTaskModal" disabled="@isLoading">New task</button>
         </div>
     </section>
 
     <section class="crm-stat-grid">
         <article class="crm-card crm-stat-card">
             <span class="crm-stat-label">Pipeline</span>
-            <strong>$528.9K</strong>
-            <span class="crm-badge crm-badge-accent">+7.8%</span>
+            <strong>@FormatCurrency(dashboardSummary.OpenPipelineValue)</strong>
+            <span class="crm-badge crm-badge-accent">@dashboardSummary.OpenDealCount open</span>
         </article>
         <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Open deals</span>
-            <strong>42</strong>
-            <span class="crm-badge">12 closing this week</span>
+            <span class="crm-stat-label">Companies</span>
+            <strong>@dashboardSummary.TotalCompanies</strong>
+            <span class="crm-badge">@dashboardSummary.TotalContacts contacts</span>
         </article>
         <article class="crm-card crm-stat-card">
             <span class="crm-stat-label">Tasks</span>
-            <strong>18</strong>
-            <span class="crm-badge crm-badge-warning">5 overdue</span>
+            <strong>@dashboardSummary.OpenTaskCount</strong>
+            <span class="crm-badge crm-badge-warning">@dashboardSummary.OverdueTaskCount overdue</span>
         </article>
-        <article class="crm-card crm-stat-card">
-            <span class="crm-stat-label">Platform</span>
-            <strong>@platform</strong>
-            <span class="crm-badge">@factor</span>
-        </article>
+        
     </section>
 
     <section class="crm-content-grid">
@@ -49,31 +63,31 @@
                     <p>Compact stage tracking for active revenue.</p>
                 </div>
                 <div class="crm-inline-actions">
-                    <span class="crm-badge">Sep 1 - Nov 30</span>
-                    <button type="button" class="crm-chip-button">Filters</button>
+                    <span class="crm-badge">@dashboardSummary.OpenDealCount open</span>
+                    <button type="button" class="crm-chip-button" @onclick="OpenCreateDealModal">New deal</button>
                 </div>
             </div>
 
             <div class="crm-stage-grid">
                 <div class="crm-stage-card">
                     <span>Lead</span>
-                    <strong>26</strong>
-                    <small>$112K</small>
+                    <strong>@GetStageCount(DealStage.Lead)</strong>
+                    <small>@FormatCurrency(GetStageValue(DealStage.Lead))</small>
                 </div>
                 <div class="crm-stage-card">
                     <span>Qualified</span>
-                    <strong>18</strong>
-                    <small>$156K</small>
+                    <strong>@GetStageCount(DealStage.Qualified)</strong>
+                    <small>@FormatCurrency(GetStageValue(DealStage.Qualified))</small>
                 </div>
                 <div class="crm-stage-card">
                     <span>Proposal</span>
-                    <strong>11</strong>
-                    <small>$148K</small>
+                    <strong>@GetStageCount(DealStage.Proposal)</strong>
+                    <small>@FormatCurrency(GetStageValue(DealStage.Proposal))</small>
                 </div>
                 <div class="crm-stage-card crm-stage-card-accent">
                     <span>Negotiation</span>
-                    <strong>7</strong>
-                    <small>$113K</small>
+                    <strong>@GetStageCount(DealStage.Negotiation)</strong>
+                    <small>@FormatCurrency(GetStageValue(DealStage.Negotiation))</small>
                 </div>
             </div>
 
@@ -84,24 +98,27 @@
                     <span>Value</span>
                     <span>Stage</span>
                 </div>
-                <div class="crm-table-row">
-                    <span>Mikasa Renewal</span>
-                    <span>Armin A.</span>
-                    <span>$156,841</span>
-                    <span><span class="crm-badge crm-badge-accent">Negotiation</span></span>
-                </div>
-                <div class="crm-table-row">
-                    <span>Rolf Inc Expansion</span>
-                    <span>Eren Y.</span>
-                    <span>$42,300</span>
-                    <span><span class="crm-badge">Proposal</span></span>
-                </div>
-                <div class="crm-table-row">
-                    <span>Cloud23 Upgrade</span>
-                    <span>Mikasa A.</span>
-                    <span>$27,435</span>
-                    <span><span class="crm-badge crm-badge-success">Qualified</span></span>
-                </div>
+                @if (deals.Count == 0)
+                {
+                    <div class="crm-table-row">
+                        <span class="crm-empty-state">No deals yet.</span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var deal in deals.Take(6))
+                    {
+                        <button type="button" class="crm-table-row crm-table-button" @onclick="() => OpenDealDialog(deal.Id)">
+                            <span>@deal.Title</span>
+                            <span>@(string.IsNullOrWhiteSpace(deal.ContactName) ? "Unassigned" : deal.ContactName)</span>
+                            <span>@FormatCurrency(deal.Value)</span>
+                            <span><span class="crm-badge @(GetDealStageBadgeClass(deal.Stage))">@deal.Stage</span></span>
+                        </button>
+                    }
+                }
             </div>
         </article>
 
@@ -111,31 +128,36 @@
                     <h2>Today</h2>
                     <p>Compact agenda for follow-ups.</p>
                 </div>
-                <span class="crm-badge crm-badge-warning">5 overdue</span>
+                <div class="crm-inline-actions">
+                    <span class="crm-badge crm-badge-warning">@dashboardSummary.OverdueTaskCount overdue</span>
+                    <button type="button" class="crm-chip-button" @onclick="OpenCreateTaskModal">New task</button>
+                </div>
             </div>
 
             <div class="crm-stack-list">
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Call Dribbble</strong>
-                        <small>Review contract terms</small>
-                    </div>
-                    <span class="crm-badge">09:00</span>
-                </div>
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Send proposal</strong>
-                        <small>Instagram partnership</small>
-                    </div>
-                    <span class="crm-badge crm-badge-accent">11:30</span>
-                </div>
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Meeting summary</strong>
-                        <small>Google quarterly review</small>
-                    </div>
-                    <span class="crm-badge">14:00</span>
-                </div>
+                @if (tasks.Count == 0)
+                {
+                    <div class="crm-empty-state">No tasks yet.</div>
+                }
+                else
+                {
+                    @foreach (var task in tasks.Take(5))
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@task.Title</strong>
+                                <small>@GetTaskSubtitle(task)</small>
+                            </div>
+                            <div class="crm-list-item-actions">
+                            <span class="crm-badge @(task.IsCompleted ? "crm-badge-success" : task.DueAtUtc.HasValue && task.DueAtUtc.Value.Date < DateTime.UtcNow.Date ? "crm-badge-warning" : string.Empty)">@GetTaskBadge(task)</span>
+                                @if (!task.IsCompleted)
+                                {
+                                    <button type="button" class="crm-chip-button" @onclick="() => CompleteTaskAsync(task.Id)" disabled="@completingTaskIds.Contains(task.Id)">@(completingTaskIds.Contains(task.Id) ? "..." : "Done")</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
             </div>
         </article>
 
@@ -149,165 +171,872 @@
             </div>
 
             <div class="crm-stack-list">
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Mikasa A.</strong>
-                        <small>Mikasa • mikasa@company.com</small>
-                    </div>
-                    <span class="crm-badge crm-badge-accent">VIP</span>
-                </div>
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Eren Y.</strong>
-                        <small>Rolf Inc • eren@rolf.example</small>
-                    </div>
-                    <span class="crm-badge">Owner</span>
-                </div>
-                <div class="crm-list-item">
-                    <div>
-                        <strong>Armin A.</strong>
-                        <small>Cloud23 • armin@cloud23.example</small>
-                    </div>
-                    <span class="crm-badge crm-badge-success">Active</span>
-                </div>
+                @if (contacts.Count == 0)
+                {
+                    <div class="crm-empty-state">No contacts yet.</div>
+                }
+                else
+                {
+                    @foreach (var contact in contacts.Take(5))
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@contact.FullName</strong>
+                                <small>@GetContactSubtitle(contact)</small>
+                            </div>
+                            <span class="crm-badge @(contact.IsArchived ? string.Empty : "crm-badge-accent")">@(contact.IsArchived ? "Archived" : "Active")</span>
+                        </div>
+                    }
+                }
             </div>
         </article>
 
         <article id="reports" class="crm-card crm-panel crm-panel-wide">
             <div class="crm-panel-header">
                 <div>
-                    <h2>Revenue snapshot</h2>
-                    <p>Example compact reporting panel.</p>
+                    <h2>Company snapshot</h2>
+                    <p>Live summary from the company and deal slices.</p>
                 </div>
                 <div class="crm-inline-actions">
-                    <span class="crm-badge">Win rate 44%</span>
-                    <span class="crm-badge crm-badge-accent">Value 528K</span>
+                    <span class="crm-badge">@dashboardSummary.ClosedDealCount closed deals</span>
+                    <span class="crm-badge crm-badge-accent">@dashboardSummary.RecentActivityCount recent activities</span>
+                    <button type="button" class="crm-chip-button" @onclick="OpenCreateCompanyModal">New company</button>
                 </div>
             </div>
 
             <div class="crm-chart-shell">
                 <div class="crm-chart-card crm-chart-card-accent">
-                    <span>Revenue this month</span>
-                    <strong>$18,952</strong>
-                    <small>37 deals in motion</small>
+                    <span>Open pipeline</span>
+                    <strong>@FormatCurrency(dashboardSummary.OpenPipelineValue)</strong>
+                    <small>@dashboardSummary.TasksDueTodayCount tasks due today</small>
                 </div>
-                <div class="crm-chart-bars" aria-hidden="true">
-                    <span style="height: 36%"></span>
-                    <span style="height: 68%"></span>
-                    <span style="height: 48%"></span>
-                    <span style="height: 82%"></span>
-                    <span style="height: 58%"></span>
-                    <span style="height: 72%"></span>
+                <div class="crm-stack-list">
+                    @if (companies.Count == 0)
+                    {
+                        <div class="crm-empty-state">No companies yet.</div>
+                    }
+                    else
+                    {
+                        @foreach (var company in companies.Take(4))
+                        {
+                            <div class="crm-list-item">
+                                <div>
+                                    <strong>@company.Name</strong>
+                                    <small>@GetCompanySubtitle(company)</small>
+                                </div>
+                                <span class="crm-badge @(company.IsArchived ? string.Empty : "crm-badge-success")">@(company.IsArchived ? "Archived" : "Active")</span>
+                            </div>
+                        }
+                    }
                 </div>
             </div>
         </article>
     </section>
 
     <section class="crm-surface-grid">
-        <article id="modals" class="crm-card crm-panel">
+       @*  <article id="modals" class="crm-card crm-panel">
             <div class="crm-panel-header">
                 <div>
                     <h2>Modal surface</h2>
                     <p>Compact create and edit flows.</p>
                 </div>
-                <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateContactModal">Open modal</button>
+                <button type="button" class="crm-button crm-button-secondary" @onclick="OpenCreateCompanyModal">Open modal</button>
             </div>
-        </article>
+        </article> *@
 
-        <article id="dialogs" class="crm-card crm-panel">
+       @*  <article id="dialogs" class="crm-card crm-panel">
             <div class="crm-panel-header">
                 <div>
                     <h2>Dialog surface</h2>
                     <p>Focused side detail pattern.</p>
                 </div>
-                <button type="button" class="crm-button crm-button-secondary" @onclick="OpenDealDialog">Open dialog</button>
+                <button type="button" class="crm-button crm-button-secondary" @onclick="(() => OpenDealDialog())">Open dialog</button>
+            </div>
+        </article> *@
+
+        <article id="activity" class="crm-card crm-panel">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Recent activity</h2>
+                    <p>Live CRM history from feature activity logging.</p>
+                </div>
+                <span class="crm-badge">@recentActivities.Count items</span>
+            </div>
+
+            <div class="crm-stack-list">
+                @if (recentActivities.Count == 0)
+                {
+                    <div class="crm-empty-state">No activity yet.</div>
+                }
+                else
+                {
+                    @foreach (var activity in recentActivities.Take(6))
+                    {
+                        <div class="crm-list-item">
+                            <div>
+                                <strong>@activity.Title</strong>
+                                <small>@GetActivitySubtitle(activity)</small>
+                            </div>
+                            <span class="crm-badge @(GetActivityBadgeClass(activity.Type))">@GetActivityBadge(activity)</span>
+                        </div>
+                    }
+                }
             </div>
         </article>
     </section>
 </div>
+
+<CrmModal IsOpen="isCreateCompanyModalOpen" Title="Create company" Subtitle="Compact modal surface" Size="Medium" OnClose="CloseCreateCompanyModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Name</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Name" />
+            </label>
+            <label>
+                <span>Industry</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Industry" />
+            </label>
+            <label>
+                <span>Website</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Website" />
+            </label>
+            <label>
+                <span>Phone</span>
+                <InputText class="crm-input" @bind-Value="companyForm.Phone" />
+            </label>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(companyModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@companyModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateCompanyModal" disabled="@isSavingCompany">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveCompanyAsync" disabled="@isSavingCompany">@(isSavingCompany ? "Saving..." : "Save company")</button>
+    </FooterContent>
+</CrmModal>
 
 <CrmModal IsOpen="isCreateContactModalOpen" Title="Create contact" Subtitle="Compact modal surface" Size="Medium" OnClose="CloseCreateContactModal">
     <ChildContent>
         <div class="crm-form-grid">
             <label>
                 <span>First name</span>
-                <input class="crm-input" value="Mikasa" />
+                <InputText class="crm-input" @bind-Value="contactForm.FirstName" />
             </label>
             <label>
                 <span>Last name</span>
-                <input class="crm-input" value="Ackerman" />
+                <InputText class="crm-input" @bind-Value="contactForm.LastName" />
             </label>
             <label>
                 <span>Email</span>
-                <input class="crm-input" value="mikasa@company.com" />
+                <InputText class="crm-input" @bind-Value="contactForm.Email" />
+            </label>
+            <label>
+                <span>Phone</span>
+                <InputText class="crm-input" @bind-Value="contactForm.Phone" />
+            </label>
+            <label>
+                <span>Job title</span>
+                <InputText class="crm-input" @bind-Value="contactForm.JobTitle" />
             </label>
             <label>
                 <span>Company</span>
-                <input class="crm-input" value="Mikasa" />
+                <InputSelect class="crm-input" @bind-Value="contactForm.CompanyId">
+                    <option value="">No company</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
             </label>
         </div>
+
+        @if (!string.IsNullOrWhiteSpace(modalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@modalErrorMessage</div>
+        }
     </ChildContent>
     <FooterContent>
-        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateContactModal">Cancel</button>
-        <button type="button" class="crm-button crm-button-primary" @onclick="CloseCreateContactModal">Save contact</button>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateContactModal" disabled="@isSavingContact">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveContactAsync" disabled="@isSavingContact">@(isSavingContact ? "Saving..." : "Save contact")</button>
+    </FooterContent>
+</CrmModal>
+
+<CrmModal IsOpen="isCreateDealModalOpen" Title="Create deal" Subtitle="Compact pipeline entry" Size="Medium" OnClose="CloseCreateDealModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Title</span>
+                <InputText class="crm-input" @bind-Value="dealForm.Title" />
+            </label>
+            <label>
+                <span>Value</span>
+                <InputNumber class="crm-input" @bind-Value="dealForm.Value" />
+            </label>
+            <label>
+                <span>Stage</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.Stage">
+                    @foreach (var stage in Enum.GetValues<DealStage>())
+                    {
+                        <option value="@stage">@stage</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Close date</span>
+                <InputDate class="crm-input" @bind-Value="dealForm.ExpectedCloseDateUtc" />
+            </label>
+            <label>
+                <span>Company</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.CompanyId">
+                    <option value="">No company</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Contact</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.ContactId">
+                    <option value="">No contact</option>
+                    @foreach (var contact in contacts)
+                    {
+                        <option value="@contact.Id">@contact.FullName</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(dealModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@dealModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateDealModal" disabled="@isSavingDeal">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveDealAsync" disabled="@isSavingDeal">@(isSavingDeal ? "Saving..." : "Save deal")</button>
+    </FooterContent>
+</CrmModal>
+
+<CrmModal IsOpen="isCreateTaskModalOpen" Title="Create task" Subtitle="Compact follow-up action" Size="Medium" OnClose="CloseCreateTaskModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Title</span>
+                <InputText class="crm-input" @bind-Value="taskForm.Title" />
+            </label>
+            <label>
+                <span>Priority</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.Priority">
+                    @foreach (var priority in Enum.GetValues<CrmTaskPriority>())
+                    {
+                        <option value="@priority">@priority</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Description</span>
+                <InputText class="crm-input" @bind-Value="taskForm.Description" />
+            </label>
+            <label>
+                <span>Due date</span>
+                <InputDate class="crm-input" @bind-Value="taskForm.DueAtUtc" />
+            </label>
+            <label>
+                <span>Contact</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.ContactId">
+                    <option value="">No contact</option>
+                    @foreach (var contact in contacts)
+                    {
+                        <option value="@contact.Id">@contact.FullName</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Deal</span>
+                <InputSelect class="crm-input" @bind-Value="taskForm.DealId">
+                    <option value="">No deal</option>
+                    @foreach (var deal in deals)
+                    {
+                        <option value="@deal.Id">@deal.Title</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(taskModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@taskModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateTaskModal" disabled="@isSavingTask">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveTaskAsync" disabled="@isSavingTask">@(isSavingTask ? "Saving..." : "Save task")</button>
     </FooterContent>
 </CrmModal>
 
 <CrmDialog IsOpen="isDealDialogOpen" Title="Deal details" Subtitle="Negotiation summary" OnClose="CloseDealDialog">
     <ChildContent>
-        <div class="crm-stack-list">
-            <div class="crm-list-item">
-                <div>
-                    <strong>Account</strong>
-                    <small>Mikasa</small>
+        @if (selectedDeal is null)
+        {
+            <div class="crm-empty-state">No deal selected.</div>
+        }
+        else
+        {
+            <div class="crm-stack-list">
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Account</strong>
+                        <small>@(selectedDeal.CompanyName ?? "No company linked")</small>
+                    </div>
+                    <span class="crm-badge @(selectedDeal.IsClosed ? string.Empty : "crm-badge-accent")">@(selectedDeal.IsClosed ? "Closed" : "Open")</span>
                 </div>
-                <span class="crm-badge crm-badge-accent">Active</span>
-            </div>
-            <div class="crm-list-item">
-                <div>
-                    <strong>Value</strong>
-                    <small>$156,841</small>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Value</strong>
+                        <small>@FormatCurrency(selectedDeal.Value)</small>
+                    </div>
+                    <span class="crm-badge">@selectedDeal.Stage</span>
                 </div>
-                <span class="crm-badge">44% probability</span>
-            </div>
-            <div class="crm-list-item">
-                <div>
-                    <strong>Next step</strong>
-                    <small>Share redlined proposal with legal notes.</small>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Primary contact</strong>
+                        <small>@(selectedDeal.ContactName ?? "Unassigned")</small>
+                    </div>
+                    <span class="crm-badge crm-badge-warning">@GetDealDateBadge(selectedDeal)</span>
                 </div>
-                <span class="crm-badge crm-badge-warning">Today</span>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Related tasks</strong>
+                        <small>@tasks.Count(task => task.DealId == selectedDeal.Id) linked tasks</small>
+                    </div>
+                    <span class="crm-badge">@GetRelatedTaskSummary(selectedDeal.Id)</span>
+                </div>
+                <label class="crm-field">
+                    <span>Stage</span>
+                    <InputSelect class="crm-input" @bind-Value="selectedDealStage">
+                        @foreach (var stage in Enum.GetValues<DealStage>())
+                        {
+                            <option value="@stage">@stage</option>
+                        }
+                    </InputSelect>
+                </label>
             </div>
-        </div>
+
+            @if (!string.IsNullOrWhiteSpace(dealDialogErrorMessage))
+            {
+                <div class="crm-alert crm-alert-danger">@dealDialogErrorMessage</div>
+            }
+        }
     </ChildContent>
     <FooterContent>
         <button type="button" class="crm-button crm-button-secondary" @onclick="CloseDealDialog">Close</button>
-        <button type="button" class="crm-button crm-button-primary" @onclick="CloseDealDialog">Update deal</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveDealStageAsync" disabled="@(selectedDeal is null || isSavingDealStage)">@(isSavingDealStage ? "Saving..." : "Update stage")</button>
     </FooterContent>
 </CrmDialog>
 
 @code {
     private string factor => FormFactor.GetFormFactor();
     private string platform => FormFactor.GetPlatform();
+    private readonly List<CompanyDto> companies = [];
+    private readonly List<ContactDto> contacts = [];
+    private readonly List<DealDto> deals = [];
+    private readonly List<CrmTaskDto> tasks = [];
+    private readonly List<CrmActivityDto> recentActivities = [];
+    private readonly HashSet<Guid> completingTaskIds = [];
+    private DashboardSummaryDto dashboardSummary = new();
+    private bool isCreateCompanyModalOpen;
     private bool isCreateContactModalOpen;
+    private bool isCreateDealModalOpen;
+    private bool isCreateTaskModalOpen;
     private bool isDealDialogOpen;
+    private bool isLoading;
+    private bool isSavingCompany;
+    private bool isSavingContact;
+    private bool isSavingDeal;
+    private bool isSavingTask;
+    private bool isSavingDealStage;
+    private string? errorMessage;
+    private string? companyModalErrorMessage;
+    private string? modalErrorMessage;
+    private string? dealModalErrorMessage;
+    private string? taskModalErrorMessage;
+    private string? dealDialogErrorMessage;
+    private DealDto? selectedDeal;
+    private DealStage selectedDealStage = DealStage.Lead;
+    private CompanyFormModel companyForm = new();
+    private ContactFormModel contactForm = new();
+    private DealFormModel dealForm = new();
+    private TaskFormModel taskForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var companiesTask = CrmApiClient.GetCompaniesAsync();
+            var contactsTask = CrmApiClient.GetContactsAsync();
+            var dealsTask = CrmApiClient.GetDealsAsync();
+            var tasksTask = CrmApiClient.GetTasksAsync();
+            var dashboardTask = CrmApiClient.GetDashboardAsync();
+            var activitiesTask = CrmApiClient.GetActivitiesAsync(12);
+
+            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask, dashboardTask, activitiesTask);
+
+            companies.Clear();
+            companies.AddRange(await companiesTask);
+
+            contacts.Clear();
+            contacts.AddRange(await contactsTask);
+
+            deals.Clear();
+            deals.AddRange(await dealsTask);
+
+            tasks.Clear();
+            tasks.AddRange(await tasksTask);
+
+            recentActivities.Clear();
+            recentActivities.AddRange(await activitiesTask);
+
+            dashboardSummary = await dashboardTask;
+
+            if (selectedDeal is not null)
+            {
+                selectedDeal = deals.FirstOrDefault(deal => deal.Id == selectedDeal.Id);
+            }
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            companies.Clear();
+            contacts.Clear();
+            deals.Clear();
+            tasks.Clear();
+            recentActivities.Clear();
+            dashboardSummary = new DashboardSummaryDto();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateCompanyModal()
+    {
+        companyForm = new CompanyFormModel();
+        companyModalErrorMessage = null;
+        isCreateCompanyModalOpen = true;
+    }
+
+    private void CloseCreateCompanyModal()
+    {
+        companyModalErrorMessage = null;
+        isCreateCompanyModalOpen = false;
+    }
 
     private void OpenCreateContactModal()
     {
+        contactForm = new ContactFormModel();
+        modalErrorMessage = null;
         isCreateContactModalOpen = true;
     }
 
     private void CloseCreateContactModal()
     {
+        modalErrorMessage = null;
         isCreateContactModalOpen = false;
     }
 
-    private void OpenDealDialog()
+    private void OpenDealDialog(Guid? dealId = null)
     {
+        dealDialogErrorMessage = null;
+        selectedDeal = dealId.HasValue
+            ? deals.FirstOrDefault(deal => deal.Id == dealId.Value)
+            : deals.FirstOrDefault();
+
+        if (selectedDeal is null)
+        {
+            errorMessage = "No deals are available yet.";
+            return;
+        }
+
+        if (!Enum.TryParse<DealStage>(selectedDeal.Stage, true, out var parsedStage))
+        {
+            parsedStage = DealStage.Lead;
+        }
+
+        selectedDealStage = parsedStage;
+
         isDealDialogOpen = true;
     }
 
     private void CloseDealDialog()
     {
+        dealDialogErrorMessage = null;
         isDealDialogOpen = false;
+    }
+
+    private void OpenCreateDealModal()
+    {
+        dealForm = new DealFormModel();
+        dealModalErrorMessage = null;
+        isCreateDealModalOpen = true;
+    }
+
+    private void CloseCreateDealModal()
+    {
+        dealModalErrorMessage = null;
+        isCreateDealModalOpen = false;
+    }
+
+    private void OpenCreateTaskModal()
+    {
+        taskForm = new TaskFormModel();
+        taskModalErrorMessage = null;
+        isCreateTaskModalOpen = true;
+    }
+
+    private void CloseCreateTaskModal()
+    {
+        taskModalErrorMessage = null;
+        isCreateTaskModalOpen = false;
+    }
+
+    private async Task SaveCompanyAsync()
+    {
+        isSavingCompany = true;
+        companyModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateCompanyAsync(new CreateCompanyRequest
+            {
+                Name = companyForm.Name,
+                Industry = companyForm.Industry,
+                Website = companyForm.Website,
+                Phone = companyForm.Phone
+            });
+
+            CloseCreateCompanyModal();
+            await LoadDashboardAsync();
+        }
+        catch (Exception exception)
+        {
+            companyModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingCompany = false;
+        }
+    }
+
+    private async Task SaveContactAsync()
+    {
+        isSavingContact = true;
+        modalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateContactAsync(new CreateContactRequest
+            {
+                FirstName = contactForm.FirstName,
+                LastName = contactForm.LastName,
+                Email = contactForm.Email,
+                Phone = contactForm.Phone,
+                JobTitle = contactForm.JobTitle,
+                CompanyId = contactForm.CompanyId
+            });
+
+            CloseCreateContactModal();
+            await LoadDashboardAsync();
+        }
+        catch (Exception exception)
+        {
+            modalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingContact = false;
+        }
+    }
+
+    private async Task SaveDealAsync()
+    {
+        isSavingDeal = true;
+        dealModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateDealAsync(new CreateDealRequest
+            {
+                Title = dealForm.Title,
+                Description = dealForm.Description,
+                Value = dealForm.Value,
+                Stage = dealForm.Stage,
+                ExpectedCloseDateUtc = NormalizeDateUtc(dealForm.ExpectedCloseDateUtc),
+                CompanyId = dealForm.CompanyId,
+                ContactId = dealForm.ContactId
+            });
+
+            CloseCreateDealModal();
+            await LoadDashboardAsync();
+        }
+        catch (Exception exception)
+        {
+            dealModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingDeal = false;
+        }
+    }
+
+    private async Task SaveTaskAsync()
+    {
+        isSavingTask = true;
+        taskModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateTaskAsync(new CreateCrmTaskRequest
+            {
+                Title = taskForm.Title,
+                Description = taskForm.Description,
+                DueAtUtc = NormalizeDateUtc(taskForm.DueAtUtc),
+                Priority = taskForm.Priority,
+                ContactId = taskForm.ContactId,
+                DealId = taskForm.DealId
+            });
+
+            CloseCreateTaskModal();
+            await LoadDashboardAsync();
+        }
+        catch (Exception exception)
+        {
+            taskModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingTask = false;
+        }
+    }
+
+    private async Task SaveDealStageAsync()
+    {
+        if (selectedDeal is null)
+        {
+            return;
+        }
+
+        isSavingDealStage = true;
+        dealDialogErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.SetDealStageAsync(selectedDeal.Id, new SetDealStageRequest { Stage = selectedDealStage });
+            await LoadDashboardAsync();
+            CloseDealDialog();
+        }
+        catch (Exception exception)
+        {
+            dealDialogErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingDealStage = false;
+        }
+    }
+
+    private async Task CompleteTaskAsync(Guid taskId)
+    {
+        if (!completingTaskIds.Add(taskId))
+        {
+            return;
+        }
+
+        errorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CompleteTaskAsync(taskId);
+            await LoadDashboardAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            completingTaskIds.Remove(taskId);
+        }
+    }
+
+    private int GetStageCount(DealStage stage)
+    {
+        return dashboardSummary.PipelineStages.FirstOrDefault(summary => string.Equals(summary.Stage, stage.ToString(), StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+    }
+
+    private decimal GetStageValue(DealStage stage)
+    {
+        return dashboardSummary.PipelineStages.FirstOrDefault(summary => string.Equals(summary.Stage, stage.ToString(), StringComparison.OrdinalIgnoreCase))?.Value ?? 0m;
+    }
+
+    private static string FormatCurrency(decimal value)
+    {
+        return value.ToString("C0");
+    }
+
+    private static DateTime? NormalizeDateUtc(DateTime? value)
+    {
+        return value?.Date;
+    }
+
+    private static string GetContactSubtitle(ContactDto contact)
+    {
+        var segments = new[] { contact.CompanyName, contact.Email, contact.Phone }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetCompanySubtitle(CompanyDto company)
+    {
+        var segments = new[]
+        {
+            company.Industry,
+            $"{company.ContactCount} contacts",
+            $"{company.OpenDealCount} open deals"
+        }.Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments);
+    }
+
+    private static string GetTaskSubtitle(CrmTaskDto task)
+    {
+        var segments = new[] { task.ContactName, task.DealTitle, task.Description }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("No details yet"));
+    }
+
+    private static string GetTaskBadge(CrmTaskDto task)
+    {
+        if (task.IsCompleted)
+        {
+            return "Done";
+        }
+
+        if (task.DueAtUtc.HasValue)
+        {
+            return task.DueAtUtc.Value.ToLocalTime().ToString("dd MMM");
+        }
+
+        return task.Priority;
+    }
+
+    private static string GetDealStageBadgeClass(string stage)
+    {
+        return stage switch
+        {
+            nameof(DealStage.Won) => "crm-badge-success",
+            nameof(DealStage.Negotiation) => "crm-badge-accent",
+            nameof(DealStage.Lost) => "crm-badge-warning",
+            _ => string.Empty
+        };
+    }
+
+    private static string GetDealDateBadge(DealDto deal)
+    {
+        if (deal.ExpectedCloseDateUtc.HasValue)
+        {
+            return deal.ExpectedCloseDateUtc.Value.ToLocalTime().ToString("dd MMM");
+        }
+
+        return deal.IsClosed ? "Closed" : "Open";
+    }
+
+    private string GetRelatedTaskSummary(Guid dealId)
+    {
+        var relatedTasks = tasks.Where(task => task.DealId == dealId).ToList();
+        if (relatedTasks.Count == 0)
+        {
+            return "None";
+        }
+
+        var openTasks = relatedTasks.Count(task => !task.IsCompleted);
+        return openTasks == 0 ? "All done" : $"{openTasks} open";
+    }
+
+    private static string GetActivitySubtitle(CrmActivityDto activity)
+    {
+        var segments = new[] { activity.Type, activity.CompanyName, activity.ContactName, activity.DealTitle, activity.TaskTitle, activity.Description }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        return string.Join(" • ", segments.DefaultIfEmpty("Recent CRM activity"));
+    }
+
+    private static string GetActivityBadge(CrmActivityDto activity)
+    {
+        return activity.CreatedUtc.ToLocalTime().ToString("dd MMM");
+    }
+
+    private static string GetActivityBadgeClass(string activityType)
+    {
+        return activityType switch
+        {
+            nameof(CrmActivityType.DealStageChanged) => "crm-badge-accent",
+            nameof(CrmActivityType.TaskCompleted) => "crm-badge-success",
+            nameof(CrmActivityType.TaskUpdated) => "crm-badge-warning",
+            _ => string.Empty
+        };
+    }
+
+    private sealed class ContactFormModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? JobTitle { get; set; }
+        public Guid? CompanyId { get; set; }
+    }
+
+    private sealed class CompanyFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Industry { get; set; }
+        public string? Website { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    private sealed class DealFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public decimal Value { get; set; }
+        public DealStage Stage { get; set; } = DealStage.Lead;
+        public DateTime? ExpectedCloseDateUtc { get; set; }
+        public Guid? CompanyId { get; set; }
+        public Guid? ContactId { get; set; }
+    }
+
+    private sealed class TaskFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public DateTime? DueAtUtc { get; set; }
+        public CrmTaskPriority Priority { get; set; } = CrmTaskPriority.Normal;
+        public Guid? ContactId { get; set; }
+        public Guid? DealId { get; set; }
     }
 }

@@ -1,0 +1,403 @@
+@page "/deals"
+@using AO.Core.Features.Companies
+@using AO.Core.Features.Contacts
+@using AO.Core.Features.Deals
+@using AO.Core.Features.Tasks
+@using AO.UI.Shared.Services
+@inject CrmApiClient CrmApiClient
+
+<PageTitle>Deals</PageTitle>
+
+<div class="crm-dashboard">
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="crm-alert crm-alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="crm-alert">Loading deals...</div>
+    }
+
+    <section class="crm-hero-card crm-card">
+        <div class="crm-hero-copy">
+            <span class="crm-eyebrow">Pipeline</span>
+            <h1>Deals</h1>
+            <p>Manage active opportunities, create new deals, and update pipeline stages.</p>
+        </div>
+        <div class="crm-hero-actions">
+            <button type="button" class="crm-button crm-button-primary" @onclick="OpenCreateDealModal">New deal</button>
+        </div>
+    </section>
+
+    <section class="crm-stat-grid">
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Open pipeline</span>
+            <strong>@FormatCurrency(deals.Where(deal => !deal.IsClosed).Sum(deal => deal.Value))</strong>
+            <span class="crm-badge crm-badge-accent">@deals.Count(deal => !deal.IsClosed) open</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Won deals</span>
+            <strong>@deals.Count(deal => deal.Stage == nameof(DealStage.Won))</strong>
+            <span class="crm-badge crm-badge-success">@FormatCurrency(deals.Where(deal => deal.Stage == nameof(DealStage.Won)).Sum(deal => deal.Value))</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Lost deals</span>
+            <strong>@deals.Count(deal => deal.Stage == nameof(DealStage.Lost))</strong>
+            <span class="crm-badge crm-badge-warning">Review drop-offs</span>
+        </article>
+        <article class="crm-card crm-stat-card">
+            <span class="crm-stat-label">Linked tasks</span>
+            <strong>@tasks.Count(task => task.DealId.HasValue && !task.IsCompleted)</strong>
+            <span class="crm-badge">Open follow-ups</span>
+        </article>
+    </section>
+
+    <section class="crm-content-grid">
+        <article class="crm-card crm-panel crm-panel-wide">
+            <div class="crm-panel-header">
+                <div>
+                    <h2>Pipeline</h2>
+                    <p>All deals with real route-based navigation.</p>
+                </div>
+                <button type="button" class="crm-chip-button" @onclick="OpenCreateDealModal">Create</button>
+            </div>
+
+            <div class="crm-stage-grid">
+                @foreach (var stage in Enum.GetValues<DealStage>())
+                {
+                    <div class="crm-stage-card @(stage == DealStage.Negotiation ? "crm-stage-card-accent" : string.Empty)">
+                        <span>@stage</span>
+                        <strong>@GetStageCount(stage)</strong>
+                        <small>@FormatCurrency(GetStageValue(stage))</small>
+                    </div>
+                }
+            </div>
+
+            <div class="crm-list-table">
+                <div class="crm-table-row crm-table-head">
+                    <span>Deal</span>
+                    <span>Contact</span>
+                    <span>Value</span>
+                    <span>Stage</span>
+                </div>
+                @if (deals.Count == 0)
+                {
+                    <div class="crm-empty-state">No deals found. Create the first deal to start the pipeline.</div>
+                }
+                else
+                {
+                    @foreach (var deal in deals)
+                    {
+                        <button type="button" class="crm-table-row crm-table-button" @onclick="() => OpenDealDialog(deal.Id)">
+                            <span>@deal.Title</span>
+                            <span>@(string.IsNullOrWhiteSpace(deal.ContactName) ? "Unassigned" : deal.ContactName)</span>
+                            <span>@FormatCurrency(deal.Value)</span>
+                            <span><span class="crm-badge @(GetDealStageBadgeClass(deal.Stage))">@deal.Stage</span></span>
+                        </button>
+                    }
+                }
+            </div>
+        </article>
+    </section>
+</div>
+
+<CrmModal IsOpen="isCreateDealModalOpen" Title="Create deal" Subtitle="Pipeline entry" Size="Medium" OnClose="CloseCreateDealModal">
+    <ChildContent>
+        <div class="crm-form-grid">
+            <label>
+                <span>Title</span>
+                <InputText class="crm-input" @bind-Value="dealForm.Title" />
+            </label>
+            <label>
+                <span>Value</span>
+                <InputNumber class="crm-input" @bind-Value="dealForm.Value" />
+            </label>
+            <label>
+                <span>Stage</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.Stage">
+                    @foreach (var stage in Enum.GetValues<DealStage>())
+                    {
+                        <option value="@stage">@stage</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Close date</span>
+                <InputDate class="crm-input" @bind-Value="dealForm.ExpectedCloseDateUtc" />
+            </label>
+            <label>
+                <span>Company</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.CompanyId" @bind-Value:after="OnDealCompanyChanged">
+                    <option value="">No company</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
+                    }
+                </InputSelect>
+            </label>
+            <label>
+                <span>Contact</span>
+                <InputSelect class="crm-input" @bind-Value="dealForm.ContactId">
+                    <option value="">No contact</option>
+                    @foreach (var contact in AvailableDealContacts)
+                    {
+                        <option value="@contact.Id">@contact.FullName</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+        @if (dealForm.CompanyId.HasValue && AvailableDealContacts.Count == 0)
+        {
+            <div class="crm-field-note">No contacts are linked to the selected company yet.</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(dealModalErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@dealModalErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseCreateDealModal" disabled="@isSavingDeal">Cancel</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveDealAsync" disabled="@isSavingDeal">@(isSavingDeal ? "Saving..." : "Save deal")</button>
+    </FooterContent>
+</CrmModal>
+
+<CrmDialog IsOpen="isDealDialogOpen" Title="Deal details" Subtitle="Update pipeline stage" OnClose="CloseDealDialog">
+    <ChildContent>
+        @if (selectedDeal is not null)
+        {
+            <div class="crm-stack-list">
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Company</strong>
+                        <small>@(selectedDeal.CompanyName ?? "No company linked")</small>
+                    </div>
+                    <span class="crm-badge">@FormatCurrency(selectedDeal.Value)</span>
+                </div>
+                <div class="crm-list-item">
+                    <div>
+                        <strong>Contact</strong>
+                        <small>@(selectedDeal.ContactName ?? "Unassigned")</small>
+                    </div>
+                    <span class="crm-badge @(selectedDeal.IsClosed ? string.Empty : "crm-badge-accent")">@(selectedDeal.IsClosed ? "Closed" : "Open")</span>
+                </div>
+                <label class="crm-field">
+                    <span>Stage</span>
+                    <InputSelect class="crm-input" @bind-Value="selectedDealStage">
+                        @foreach (var stage in Enum.GetValues<DealStage>())
+                        {
+                            <option value="@stage">@stage</option>
+                        }
+                    </InputSelect>
+                </label>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(dealDialogErrorMessage))
+        {
+            <div class="crm-alert crm-alert-danger">@dealDialogErrorMessage</div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="crm-button crm-button-secondary" @onclick="CloseDealDialog">Close</button>
+        <button type="button" class="crm-button crm-button-primary" @onclick="SaveDealStageAsync" disabled="@(selectedDeal is null || isSavingDealStage)">@(isSavingDealStage ? "Saving..." : "Update stage")</button>
+    </FooterContent>
+</CrmDialog>
+
+@code {
+    private readonly List<CompanyDto> companies = [];
+    private readonly List<ContactDto> contacts = [];
+    private readonly List<DealDto> deals = [];
+    private readonly List<CrmTaskDto> tasks = [];
+    private bool isLoading;
+    private bool isCreateDealModalOpen;
+    private bool isDealDialogOpen;
+    private bool isSavingDeal;
+    private bool isSavingDealStage;
+    private string? errorMessage;
+    private string? dealModalErrorMessage;
+    private string? dealDialogErrorMessage;
+    private DealDto? selectedDeal;
+    private DealStage selectedDealStage = DealStage.Lead;
+    private DealFormModel dealForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var companiesTask = CrmApiClient.GetCompaniesAsync();
+            var contactsTask = CrmApiClient.GetContactsAsync();
+            var dealsTask = CrmApiClient.GetDealsAsync();
+            var tasksTask = CrmApiClient.GetTasksAsync();
+
+            await Task.WhenAll(companiesTask, contactsTask, dealsTask, tasksTask);
+
+            companies.Clear();
+            companies.AddRange(await companiesTask);
+            contacts.Clear();
+            contacts.AddRange(await contactsTask);
+            deals.Clear();
+            deals.AddRange(await dealsTask);
+            tasks.Clear();
+            tasks.AddRange(await tasksTask);
+
+            if (selectedDeal is not null)
+            {
+                selectedDeal = deals.FirstOrDefault(deal => deal.Id == selectedDeal.Id);
+                if (selectedDeal is null)
+                {
+                    isDealDialogOpen = false;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            companies.Clear();
+            contacts.Clear();
+            deals.Clear();
+            tasks.Clear();
+            selectedDeal = null;
+            isDealDialogOpen = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenCreateDealModal()
+    {
+        dealForm = new DealFormModel();
+        dealModalErrorMessage = null;
+        isCreateDealModalOpen = true;
+    }
+
+    private void CloseCreateDealModal()
+    {
+        dealModalErrorMessage = null;
+        isCreateDealModalOpen = false;
+    }
+
+    private void OpenDealDialog(Guid dealId)
+    {
+        dealDialogErrorMessage = null;
+        selectedDeal = deals.FirstOrDefault(deal => deal.Id == dealId);
+        if (selectedDeal is null)
+        {
+            return;
+        }
+
+        selectedDealStage = Enum.TryParse<DealStage>(selectedDeal.Stage, true, out var stage)
+            ? stage
+            : DealStage.Lead;
+
+        isDealDialogOpen = true;
+    }
+
+    private void CloseDealDialog()
+    {
+        dealDialogErrorMessage = null;
+        isDealDialogOpen = false;
+    }
+
+    private async Task SaveDealAsync()
+    {
+        isSavingDeal = true;
+        dealModalErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.CreateDealAsync(new CreateDealRequest
+            {
+                Title = dealForm.Title,
+                Description = dealForm.Description,
+                Value = dealForm.Value,
+                Stage = dealForm.Stage,
+                ExpectedCloseDateUtc = dealForm.ExpectedCloseDateUtc?.Date,
+                CompanyId = dealForm.CompanyId,
+                ContactId = dealForm.ContactId
+            });
+
+            CloseCreateDealModal();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            dealModalErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingDeal = false;
+        }
+    }
+
+    private async Task SaveDealStageAsync()
+    {
+        if (selectedDeal is null)
+        {
+            return;
+        }
+
+        isSavingDealStage = true;
+        dealDialogErrorMessage = null;
+
+        try
+        {
+            await CrmApiClient.SetDealStageAsync(selectedDeal.Id, new SetDealStageRequest { Stage = selectedDealStage });
+            await LoadAsync();
+            CloseDealDialog();
+        }
+        catch (Exception exception)
+        {
+            dealDialogErrorMessage = exception.Message;
+        }
+        finally
+        {
+            isSavingDealStage = false;
+        }
+    }
+
+    private int GetStageCount(DealStage stage) => deals.Count(deal => string.Equals(deal.Stage, stage.ToString(), StringComparison.OrdinalIgnoreCase));
+    private decimal GetStageValue(DealStage stage) => deals.Where(deal => string.Equals(deal.Stage, stage.ToString(), StringComparison.OrdinalIgnoreCase)).Sum(deal => deal.Value);
+    private static string FormatCurrency(decimal value) => value.ToString("C0");
+    private IReadOnlyList<ContactDto> AvailableDealContacts =>
+        dealForm.CompanyId.HasValue
+            ? contacts.Where(contact => contact.CompanyId == dealForm.CompanyId.Value).ToList()
+            : contacts;
+
+    private void OnDealCompanyChanged()
+    {
+        if (dealForm.ContactId.HasValue && AvailableDealContacts.All(contact => contact.Id != dealForm.ContactId.Value))
+        {
+            dealForm.ContactId = null;
+        }
+    }
+
+    private static string GetDealStageBadgeClass(string stage) => stage switch
+    {
+        nameof(DealStage.Won) => "crm-badge-success",
+        nameof(DealStage.Negotiation) => "crm-badge-accent",
+        nameof(DealStage.Lost) => "crm-badge-warning",
+        _ => string.Empty
+    };
+
+    private sealed class DealFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public decimal Value { get; set; }
+        public DealStage Stage { get; set; } = DealStage.Lead;
+        public DateTime? ExpectedCloseDateUtc { get; set; }
+        public Guid? CompanyId { get; set; }
+        public Guid? ContactId { get; set; }
+    }
+}
