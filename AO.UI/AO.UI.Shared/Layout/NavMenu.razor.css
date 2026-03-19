@@ -74,3 +74,25 @@
     justify-content: center;
     color: var(--color-accent);
 }
+
+@media (min-width: 768px) {
+    .crm-sidebar.collapsed {
+        padding-inline: 0.5rem;
+    }
+
+    .crm-sidebar.collapsed .crm-sidebar-header,
+    .crm-sidebar.collapsed .crm-sidebar-footer,
+    .crm-sidebar.collapsed .crm-nav-label,
+    .crm-sidebar.collapsed .crm-nav-link span:not(.crm-nav-icon) {
+        display: none;
+    }
+
+    .crm-sidebar.collapsed .crm-nav-link {
+        justify-content: center;
+        padding-inline: 0.5rem;
+    }
+
+    .crm-sidebar.collapsed .crm-nav-group {
+        justify-items: center;
+    }
+}

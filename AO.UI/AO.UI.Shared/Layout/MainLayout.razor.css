@@ -82,6 +82,10 @@
     gap: 0.375rem;
 }
 
+.crm-desktop-nav-toggle {
+    display: none;
+}
+
 .crm-main-shell {
     width: 100%;
     min-height: 0;
@@ -129,6 +133,10 @@
         grid-template-columns: 15.5rem minmax(0, 1fr);
     }
 
+    .crm-shell.sidebar-collapsed {
+        grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+
     .crm-sidebar-shell {
         position: relative;
         inset: auto;
@@ -140,6 +148,10 @@
     .crm-overlay,
     .crm-mobile-nav {
         display: none;
+    }
+
+    .crm-desktop-nav-toggle {
+        display: inline-grid;
     }
 
     .crm-topbar-shell {

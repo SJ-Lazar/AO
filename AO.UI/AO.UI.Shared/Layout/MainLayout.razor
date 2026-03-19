@@ -2,11 +2,11 @@
 @using System.Text.Json
 @inject IJSRuntime JS
 
-<div class="crm-shell @(isDarkTheme ? "theme-dark" : "theme-light") @(isNavigationOpen ? "nav-open" : string.Empty)" style="@GetThemeStyle()">
+<div class="crm-shell @(isDarkTheme ? "theme-dark" : "theme-light") @(isNavigationOpen ? "nav-open" : string.Empty) @(isSidebarCollapsed ? "sidebar-collapsed" : string.Empty)" style="@GetThemeStyle()">
     <button type="button" class="crm-overlay" aria-label="Close navigation" @onclick="CloseNavigation"></button>
 
     <aside class="crm-sidebar-shell">
-        <NavMenu OnNavigate="CloseNavigation" />
+        <NavMenu OnNavigate="CloseNavigation" IsCollapsed="isSidebarCollapsed" />
     </aside>
 
     <div class="crm-app-host">
@@ -25,6 +25,7 @@
             </div>
 
             <div class="crm-topbar-actions">
+                <button type="button" class="crm-icon-button crm-desktop-nav-toggle" aria-label="@(isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")" title="@(isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")" @onclick="ToggleSidebarCollapseAsync">@(isSidebarCollapsed ? "»" : "«")</button>
                 <button type="button" class="crm-chip-button" @onclick="ToggleTheme">@(isDarkTheme ? "Dark" : "Light")</button>
                 <button type="button" class="crm-icon-button" aria-label="Open theme settings" @onclick="OpenThemeSettingsModal">⚙</button>
             </div>
@@ -94,6 +95,7 @@
 
 @code {
     private const string ThemeSettingsStorageKey = "ao.crm.theme.settings";
+    private const string SidebarCollapsedStorageKey = "ao.crm.sidebar.collapsed";
     private const string DefaultAccentColor = "#df3f74";
     private const string DefaultSuccessColor = "#299b74";
     private const string DefaultWarningColor = "#c9891f";
@@ -102,6 +104,7 @@
 
     private bool isDarkTheme;
     private bool isNavigationOpen;
+    private bool isSidebarCollapsed;
     private bool isThemeSettingsModalOpen;
     private bool isSavingThemeSettings;
     private string? themeSettingsErrorMessage;
@@ -126,12 +129,14 @@
             var savedSettings = JsonSerializer.Deserialize<ThemeSettingsModel>(savedSettingsJson);
             if (savedSettings is null)
             {
+                await LoadSidebarStateAsync();
                 return;
             }
 
             appliedThemeSettings = ThemeSettingsModel.Normalize(savedSettings);
             themeSettingsDraft = appliedThemeSettings.Clone();
             isDarkTheme = string.Equals(appliedThemeSettings.DefaultTheme, DarkTheme, StringComparison.OrdinalIgnoreCase);
+            await LoadSidebarStateAsync();
             StateHasChanged();
         }
         catch
@@ -199,6 +204,34 @@
     private void CloseNavigation()
     {
         isNavigationOpen = false;
+    }
+
+    private async Task ToggleSidebarCollapseAsync()
+    {
+        isSidebarCollapsed = !isSidebarCollapsed;
+
+        try
+        {
+            await JS.InvokeVoidAsync("crmThemeSettings.save", SidebarCollapsedStorageKey, isSidebarCollapsed.ToString());
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task LoadSidebarStateAsync()
+    {
+        try
+        {
+            var savedSidebarState = await JS.InvokeAsync<string?>("crmThemeSettings.load", SidebarCollapsedStorageKey);
+            if (bool.TryParse(savedSidebarState, out var collapsed))
+            {
+                isSidebarCollapsed = collapsed;
+            }
+        }
+        catch
+        {
+        }
     }
 
     private string GetThemeStyle()
